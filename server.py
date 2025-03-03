@@ -3,7 +3,7 @@ import cv2
 import logging
 import aiohttp_cors
 from aiohttp import web
-from aiortc import RTCPeerConnection, RTCSessionDescription, MediaStreamTrack
+from aiortc import RTCPeerConnection, RTCSessionDescription, MediaStreamTrack, RTCRtpSender
 from aiortc.contrib.media import MediaRelay
 from yolo_fall_detection import FallDetector
 
@@ -21,29 +21,41 @@ class VideoProcessorTrack(MediaStreamTrack):
         super().__init__()
         self.track = track
         self.frame_count = 0
+        self.last_restart = asyncio.get_event_loop().time()
 
     async def recv(self):
-        frame = await self.track.recv()
-        self.frame_count += 1
+        try:
+            frame = await self.track.recv()
+            self.frame_count += 1
 
-        if self.frame_count % 3 == 0:  # Process every third frame
-            img = frame.to_ndarray(format="bgr24")
-            processed_img = fall_detector.process_frame(img)
-            cv2.imshow("Fall Detection", processed_img)
-            cv2.waitKey(1)
-            logging.info(f"✅ Processed frame {self.frame_count}")
-        else:
-            logging.info(f"⏭ Skipped frame {self.frame_count}")
+            if self.frame_count % 3 == 0:  # Process every third frame
+                img = frame.to_ndarray(format="bgr24")
+                processed_img = fall_detector.process_frame(img)
+                cv2.imshow("Fall Detection", processed_img)
+                cv2.waitKey(1)
+                logging.info(f"✅ Processed frame {self.frame_count}")
+            else:
+                logging.info(f"⏭ Skipped frame {self.frame_count}")
 
-        return frame
+            # Periodic restart of video processing
+            current_time = asyncio.get_event_loop().time()
+            if current_time - self.last_restart > 300:  # Restart every 5 minutes
+                logging.info("Restarting video processing...")
+                self.frame_count = 0
+                self.last_restart = current_time
+                cv2.destroyAllWindows()
+                fall_detector.reset()
 
-async def offer(request):
-    params = await request.json()
-    logging.info("📩 Received SDP offer")
+            return frame
 
+        except Exception as e:
+            logging.error(f"Error in video processing: {e}")
+            await asyncio.sleep(1)  # Wait a bit before trying again
+            return await self.recv()  # Recursive call to try again
+
+async def create_peer_connection():
     peer = RTCPeerConnection()
-    pcs.add(peer)
-
+    
     @peer.on("track")
     def on_track(track):
         if track.kind == "video":
@@ -58,10 +70,31 @@ async def offer(request):
         if peer.connectionState == "failed":
             await peer.close()
             pcs.discard(peer)
+            # Attempt to reconnect
+            await asyncio.sleep(5)
+            new_peer = await create_peer_connection()
+            pcs.add(new_peer)
+
+    return peer
+
+async def offer(request):
+    params = await request.json()
+    logging.info("📩 Received SDP offer")
+
+    peer = await create_peer_connection()
+    pcs.add(peer)
 
     try:
         offer = RTCSessionDescription(sdp=params["sdp"], type=params["type"])
         await peer.setRemoteDescription(offer)
+
+        # Disable RTX to avoid decoder issues
+        for transceiver in peer.getTransceivers():
+            if transceiver.kind == "video":
+                codecs = RTCRtpSender.getCapabilities("video").codecs
+                codecs = [codec for codec in codecs if codec.mimeType.lower() != "video/rtx"]
+                transceiver.setCodecPreferences(codecs)
+
         answer = await peer.createAnswer()
         await peer.setLocalDescription(answer)
     except Exception as e:
@@ -92,4 +125,4 @@ async def on_shutdown(app):
 app.on_shutdown.append(on_shutdown)
 
 if __name__ == "__main__":
-    web.run_app(app, port=5000)
+    web.run_app(app, host='0.0.0.0', port=5000)

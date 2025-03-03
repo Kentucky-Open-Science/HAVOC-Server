@@ -45,3 +45,7 @@ class FallDetector:
                         cv2.putText(img, "Fall Detected", (x1, y1 - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
 
         return img  # Return the processed frame
+
+    def reset(self):
+        # Reset any internal state, clear caches, etc.
+        pass
