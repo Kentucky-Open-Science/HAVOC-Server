@@ -1,13 +1,10 @@
 import asyncio
 import cv2
-import logging
 import aiohttp_cors
 from aiohttp import web
 from aiortc import RTCPeerConnection, RTCSessionDescription, MediaStreamTrack, RTCRtpSender
 from aiortc.contrib.media import MediaRelay
 from yolo_fall_detection import FallDetector
-
-logging.basicConfig(level=logging.INFO)
 
 app = web.Application()
 pcs = set()
@@ -33,14 +30,14 @@ class VideoProcessorTrack(MediaStreamTrack):
                 processed_img = fall_detector.process_frame(img)
                 cv2.imshow("Fall Detection", processed_img)
                 cv2.waitKey(1)
-                logging.info(f"✅ Processed frame {self.frame_count}")
+                print(f"✅ Processed frame {self.frame_count}")
             else:
-                logging.info(f"⏭ Skipped frame {self.frame_count}")
+                print(f"⏭ Skipped frame {self.frame_count}")
 
             # Periodic restart of video processing
             current_time = asyncio.get_event_loop().time()
             if current_time - self.last_restart > 300:  # Restart every 5 minutes
-                logging.info("Restarting video processing...")
+                print("Restarting video processing...")
                 self.frame_count = 0
                 self.last_restart = current_time
                 cv2.destroyAllWindows()
@@ -49,7 +46,7 @@ class VideoProcessorTrack(MediaStreamTrack):
             return frame
 
         except Exception as e:
-            logging.error(f"Error in video processing: {e}")
+            print(f"Error in video processing: {e}")
             await asyncio.sleep(1)  # Wait a bit before trying again
             return await self.recv()  # Recursive call to try again
 
@@ -59,14 +56,14 @@ async def create_peer_connection():
     @peer.on("track")
     def on_track(track):
         if track.kind == "video":
-            logging.info("🎥 Received video track")
+            print("🎥 Received video track")
             relayed_track = relay.subscribe(track)
             video_processor = VideoProcessorTrack(relayed_track)
             peer.addTrack(video_processor)
 
     @peer.on("connectionstatechange")
     async def on_connectionstatechange():
-        logging.info(f"Connection state is {peer.connectionState}")
+        print(f"Connection state is {peer.connectionState}")
         if peer.connectionState == "failed":
             await peer.close()
             pcs.discard(peer)
@@ -79,7 +76,7 @@ async def create_peer_connection():
 
 async def offer(request):
     params = await request.json()
-    logging.info("📩 Received SDP offer")
+    print("📩 Received SDP offer")
 
     peer = await create_peer_connection()
     pcs.add(peer)
@@ -98,10 +95,10 @@ async def offer(request):
         answer = await peer.createAnswer()
         await peer.setLocalDescription(answer)
     except Exception as e:
-        logging.error(f"❌ Error in WebRTC setup: {e}")
+        print(f"❌ Error in WebRTC setup: {e}")
         return web.json_response({"error": str(e)}, status=500)
 
-    logging.info("📤 Sending SDP answer")
+    print("📤 Sending SDP answer")
     return web.json_response({
         "sdp": peer.localDescription.sdp,
         "type": peer.localDescription.type
@@ -125,4 +122,5 @@ async def on_shutdown(app):
 app.on_shutdown.append(on_shutdown)
 
 if __name__ == "__main__":
+    print("Starting server on http://0.0.0.0:5000")
     web.run_app(app, host='0.0.0.0', port=5000)
