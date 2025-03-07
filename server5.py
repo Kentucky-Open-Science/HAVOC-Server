@@ -245,7 +245,7 @@ cors = aiohttp_cors.setup(app, defaults={
 })
 
 # Register routes with CORS
-route = cors.add(app.router.add_resource("/offer"))
+route = cors.add(app.router.add_resource("/offer")) 
 cors.add(route.add_route("POST", offer))
 
 if __name__ == "__main__":
