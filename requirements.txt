@@ -1,0 +1,8 @@
+aiohttp
+aiohttp-cors
+aiortc
+asyncio
+opencv-python
+numpy
+logging
+json5
