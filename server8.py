@@ -43,7 +43,7 @@ class VideoProcessorTrack(MediaStreamTrack):
         self.max_errors = 5
         self.last_frame_time = time.time()
         self.buffer_size = 0
-        self.skip_factor = 2
+        self.skip_factor = 1
         self.max_latency = 0.3
         self.frame_queue = asyncio.Queue(maxsize=3)  # Reduced queue size
         self.processing_task = asyncio.create_task(self.process_frames())
@@ -55,71 +55,75 @@ class VideoProcessorTrack(MediaStreamTrack):
             try:
                 frame = await asyncio.wait_for(self.frame_queue.get(), timeout=1.0)
                 current_time = time.time()
-                
+
                 if self.frame_count % self.skip_factor == 0:
                     img = frame.to_ndarray(format="bgr24")
-                    
+
                     if os.environ.get('DISPLAY'):
                         try:
                             cv2.imshow("Fall Detection", img)
                             cv2.waitKey(1)
-                        except Exception as e:
-                            logger.error(f"cv2.imshow failed: {e}")
+                        except cv2.error as e:
+                            logger.error(f"cv2.imshow error: {e}")
+                            traceback.print_exc()
                     else:
-                        logger.info("No DISPLAY environment variable, skipping cv2.imshow().")
-                    
-                    logger.info(f"✅ Processed frame {self.frame_count} (latency: {time.time() - current_time:.2f}s)")
+                        logger.info("Headless mode detected. Skipping frame display.")
+
+                    latency = time.time() - current_time
+                    logger.info(f"✅ Processed frame {self.frame_count} (latency: {latency:.2f}s)")
+                else:
+                    logger.debug(f"⏭ Skipped frame {self.frame_count}")
+
+                self.frame_queue.task_done()
                 self.frame_count += 1
-                
+
+            except asyncio.TimeoutError:
+                logger.warning("Timeout waiting for frame from queue.")
+                continue
             except asyncio.CancelledError:
                 logger.info("Frame processing task cancelled.")
                 break
             except Exception as e:
-                logger.error(f"Error processing frame: {e}")
-                logger.error(traceback.format_exc())
+                logger.error(f"Unhandled exception during frame processing: {e}")
+                traceback.print_exc()
                 await asyncio.sleep(0.1)
 
     async def recv(self):
         try:
             frame = await self.track.recv()
-            frame_delay = time.time() - self.last_frame_time
-            self.buffer_size = frame_delay
+            current_time = time.time()
+            frame_delay = current_time - self.last_frame_time
+            self.last_frame_time = current_time
 
             if frame_delay > self.max_latency:
                 self.skip_factor = min(10, self.skip_factor + 1)
-                logger.warning(f"High latency ({frame_delay:.2f}s), increasing skip factor to {self.skip_factor}")
+                logger.warning(f"High latency ({frame_delay:.2f}s), skip factor now {self.skip_factor}")
             elif frame_delay < self.max_latency / 2 and self.skip_factor > 2:
                 self.skip_factor = max(2, self.skip_factor - 1)
-                logger.info(f"Latency normal ({frame_delay:.2f}s), decreasing skip factor to {self.skip_factor}")
+                logger.info(f"Latency back to normal ({frame_delay:.2f}s), adjusting skip factor: {self.skip_factor}")
 
-            self.consecutive_errors = 0
-            self.frame_count += 1
-            
-            try:
+            if not self.frame_queue.full():
                 self.frame_queue.put_nowait(frame)
-            except asyncio.QueueFull:
-                logger.warning("Frame queue full, dropping frame")
-            
+            else:
+                logger.warning("Frame queue full, dropping frame immediately.")
+
             return frame
+
         except Exception as e:
-            self.consecutive_errors += 1
-            logger.error(f"Error in video processing: {e}")
-            if self.consecutive_errors >= self.max_errors:
-                logger.critical(f"Too many consecutive errors ({self.consecutive_errors}), resetting connection")
-                raise RuntimeError("Video processing failed repeatedly")
-            await asyncio.sleep(0.05)
+            logger.error(f"recv encountered exception: {e}")
+            traceback.print_exc()
             return None
 
 async def create_peer_connection():
     peer = RTCPeerConnection()
-    
+
     @peer.on("connectionstatechange")
     async def on_connectionstatechange():
-        logger.info(f"Connection state is {peer.connectionState}")
-        if peer.connectionState == "failed":
+        logger.info(f"🔗 WebRTC Connection state: {peer.connectionState}")
+        if peer.connectionState in ("failed", "closed", "disconnected"):
             await peer.close()
             pcs.discard(peer)
-    
+
     @peer.on("track")
     def on_track(track):
         if track.kind == "video":
@@ -130,7 +134,6 @@ async def create_peer_connection():
         elif track.kind == "audio":
             logger.info("🔊 Received audio track")
             relayed_audio = relay.subscribe(track)
-            peer.addTrack(relayed_audio)
             audio_sink.addTrack(relayed_audio)
 
     return peer
@@ -138,16 +141,18 @@ async def create_peer_connection():
 async def offer(request):
     params = await request.json()
     logger.info("📩 Received SDP offer")
-    
+
     peer = await create_peer_connection()
     pcs.add(peer)
+
     try:
         offer = RTCSessionDescription(sdp=params["sdp"], type=params["type"])
         await peer.setRemoteDescription(offer)
         answer = await peer.createAnswer()
         await peer.setLocalDescription(answer)
     except Exception as e:
-        logger.error(f"❌ WebRTC setup failed: {e}")
+        logger.error(f"❌ Failed during SDP negotiation: {e}")
+        traceback.print_exc()
         await peer.close()
         pcs.discard(peer)
         return web.json_response({"error": str(e)}, status=500)
@@ -160,13 +165,21 @@ async def offer(request):
 async def cleanup_resources():
     logger.info("Cleaning up resources...")
     for peer in pcs:
-        await peer.close()
+        try:
+            await peer.close()
+        except Exception as e:
+            logger.error(f"Error closing peer connection: {e}")
+            traceback.print_exc()
     pcs.clear()
-    await audio_sink.stop()
+
     try:
+        await audio_sink.stop()
+    except Exception as e:
+        logger.error(f"Audio sink cleanup failed: {e}")
+
+    if os.environ.get('DISPLAY'):
         cv2.destroyAllWindows()
-    except:
-        pass
+
     import gc
     gc.collect()
     logger.info("Cleanup complete")
@@ -198,4 +211,6 @@ app.router.add_post("/offer", offer)
 if __name__ == "__main__":
     logger.info("🚀 Starting WebRTC server on http://0.0.0.0:5000")
     handle_exit_signals()
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     web.run_app(app, host='0.0.0.0', port=5000)
