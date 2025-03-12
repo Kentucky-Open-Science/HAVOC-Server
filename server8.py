@@ -91,6 +91,8 @@ class VideoProcessorTrack(MediaStreamTrack):
     async def recv(self):
         try:
             frame = await self.track.recv()
+            logger.info(f"Frame received at recv(): timestamp={frame.pts}, time={time.time()}")
+
             current_time = time.time()
             frame_delay = current_time - self.last_frame_time
             self.last_frame_time = current_time
