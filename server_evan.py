@@ -7,9 +7,10 @@ from aiortc.contrib.media import MediaRelay
 from flask import Flask, Response
 import threading
 import time
+import numpy as np
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("fall_detection")
+logger = logging.getLogger("temi-stream")
 
 relay = MediaRelay()
 pcs = set()
@@ -28,7 +29,7 @@ class VideoProcessorTrack(MediaStreamTrack):
     async def recv(self):
         frame = await self.track.recv()
         frame_holder['frame'] = frame
-        logger.info(f"✅ Frame received at recv(): pts={frame.pts}, size={frame.width}x{frame.height}, time={time.time()}")
+        # logger.info(f"✅ Frame received at recv(): pts={frame.pts}, size={frame.width}x{frame.height}, time={time.time()}")
         return frame
 
 
@@ -45,7 +46,7 @@ async def create_peer_connection():
                     while True:
                         frame = await processor.recv()
                         frame_holder['frame'] = frame
-                        logger.info(f"✅ Frame processed: pts={frame.pts}, size={frame.width}x{frame.height}")
+                        # logger.info(f"✅ Frame processed: pts={frame.pts}, size={frame.width}x{frame.height}")
                 except Exception as e:
                     logger.error(f"Error consuming track: {e}")
 
@@ -79,39 +80,58 @@ flask_app = Flask(__name__)
 
 @flask_app.route('/')
 def index():
-    return '<html><body>hello<img src="/video_feed"></body></html>'
+    return '<html><body><img src="/video_feed"></body></html>'
 
 @flask_app.route('/video_feed')
 def video_feed():
     return Response(gen_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
+
+last_pts = None
+freeze_detected_time = None
+freeze_threshold = 10  # Seconds before switching to a placeholder
+duplicate_threshold = 20  # Number of duplicate frames before switching to a placeholder
+duplicate_frame_count = 0
+
+# read in the offline image
+offline_img = cv2.imread("temiFace for TV.png")
+ret, placeholder_buffer = cv2.imencode('.png', offline_img)
+offline_bytes = placeholder_buffer.tobytes()
+
+
 def gen_frames():
+    global last_pts, freeze_detected_time, duplicate_frame_count
+
     while True:
+        time.sleep(0.02)
         frame = frame_holder.get('frame', None)
+
         if frame is not None:
-            logger.info("✅ Got frame from frame_holder for streaming")
-            img = frame.to_ndarray(format="bgr24")
-            ret, buffer = cv2.imencode('.jpg', img)
-            frame_bytes = buffer.tobytes()
+            if last_pts is None or frame.pts != last_pts:
+                # New frame detected, reset freeze timer and duplicate count
+                last_pts = frame.pts
+                freeze_detected_time = None
+                duplicate_frame_count = 0
+                # logger.info("✅ Streaming live frame")
+
+                img = frame.to_ndarray(format="bgr24")
+                ret, buffer = cv2.imencode('.jpg', img)
+                frame_bytes = buffer.tobytes()
+            else:
+                if freeze_detected_time is None:
+                    freeze_detected_time = time.time()
+                elif duplicate_frame_count > duplicate_threshold or time.time() - freeze_detected_time > freeze_threshold:
+                    # logger.warning("🚨 Stream frozen, displaying placeholder image")
+                    frame_bytes = offline_bytes
+                else:
+                    duplicate_frame_count += 1
+                    # logger.info(f"⚠️ Duplicate frame detected: {duplicate_frame_count}")
+
             yield (b'--frame\r\n'
                    b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
         else:
             logger.debug("Waiting for first frame...")
             time.sleep(0.01)
-
-
-# webcam test
-# def gen_frames():
-#     cap = cv2.VideoCapture(0)  # local webcam test
-#     while True:
-#         success, frame = cap.read()
-#         if not success:
-#             continue
-#         ret, buffer = cv2.imencode('.jpg', frame)
-#         frame_bytes = buffer.tobytes()
-#         yield (b'--frame\r\n'
-#                b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-
 
 
 def start_flask():
