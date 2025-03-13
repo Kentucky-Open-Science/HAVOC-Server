@@ -98,21 +98,22 @@ offline_img = cv2.imread("temiFace for TV.png")
 ret, placeholder_buffer = cv2.imencode('.png', offline_img)
 offline_bytes = placeholder_buffer.tobytes()
 
-
+frame_holder['frame'] = offline_bytes  # Store bytes instead of None
 def gen_frames():
     global last_pts, freeze_detected_time, duplicate_frame_count
 
     while True:
         time.sleep(0.02)
-        frame = frame_holder.get('frame', None)
 
-        if frame is not None:
+        frame = frame_holder.get('frame', offline_bytes)  # Default to placeholder
+        if isinstance(frame, bytes):
+            frame_bytes = frame  # Already pre-encoded placeholder
+        else:
+            # Normal video frame processing
             if last_pts is None or frame.pts != last_pts:
-                # New frame detected, reset freeze timer and duplicate count
                 last_pts = frame.pts
                 freeze_detected_time = None
                 duplicate_frame_count = 0
-                # logger.info("✅ Streaming live frame")
 
                 img = frame.to_ndarray(format="bgr24")
                 ret, buffer = cv2.imencode('.jpg', img)
@@ -121,17 +122,47 @@ def gen_frames():
                 if freeze_detected_time is None:
                     freeze_detected_time = time.time()
                 elif duplicate_frame_count > duplicate_threshold or time.time() - freeze_detected_time > freeze_threshold:
-                    # logger.warning("🚨 Stream frozen, displaying placeholder image")
-                    frame_bytes = offline_bytes
+                    frame_bytes = offline_bytes  # Stream frozen, switch to placeholder
                 else:
                     duplicate_frame_count += 1
-                    # logger.info(f"⚠️ Duplicate frame detected: {duplicate_frame_count}")
 
-            yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-        else:
-            logger.debug("Waiting for first frame...")
-            time.sleep(0.01)
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+
+#
+# def gen_frames():
+#     global last_pts, freeze_detected_time, duplicate_frame_count
+#
+#     while True:
+#         time.sleep(0.02)
+#         frame = frame_holder.get('frame', None)
+#
+#         if frame is not None:
+#             if last_pts is None or frame.pts != last_pts:
+#                 # New frame detected, reset freeze timer and duplicate count
+#                 last_pts = frame.pts
+#                 freeze_detected_time = None
+#                 duplicate_frame_count = 0
+#                 # logger.info("✅ Streaming live frame")
+#
+#                 img = frame.to_ndarray(format="bgr24")
+#                 ret, buffer = cv2.imencode('.jpg', img)
+#                 frame_bytes = buffer.tobytes()
+#             else:
+#                 if freeze_detected_time is None:
+#                     freeze_detected_time = time.time()
+#                 elif duplicate_frame_count > duplicate_threshold or time.time() - freeze_detected_time > freeze_threshold:
+#                     # logger.warning("🚨 Stream frozen, displaying placeholder image")
+#                     frame_bytes = offline_bytes
+#                 else:
+#                     duplicate_frame_count += 1
+#                     # logger.info(f"⚠️ Duplicate frame detected: {duplicate_frame_count}")
+#
+#             yield (b'--frame\r\n'
+#                    b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+#         else:
+#             logger.debug("Waiting for first frame...")
+#             time.sleep(0.01)
 
 
 def start_flask():
