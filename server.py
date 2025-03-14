@@ -9,7 +9,7 @@ import threading
 import time
 import numpy as np
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)  # Changed to DEBUG for detailed logs
 logger = logging.getLogger("temi-stream")
 
 relay = MediaRelay()
@@ -29,9 +29,8 @@ class VideoProcessorTrack(MediaStreamTrack):
     async def recv(self):
         frame = await self.track.recv()
         frame_holder['frame'] = frame
-        # logger.info(f"✅ Frame received at recv(): pts={frame.pts}, size={frame.width}x{frame.height}, time={time.time()}")
+        logger.debug(f"WebRTC recv: frame received, pts={frame.pts}, size={frame.width}x{frame.height}")
         return frame
-
 
 async def create_peer_connection():
     peer = RTCPeerConnection()
@@ -46,7 +45,6 @@ async def create_peer_connection():
                     while True:
                         frame = await processor.recv()
                         frame_holder['frame'] = frame
-                        # logger.info(f"✅ Frame processed: pts={frame.pts}, size={frame.width}x{frame.height}")
                 except Exception as e:
                     logger.error(f"Error consuming track: {e}")
 
@@ -81,18 +79,20 @@ flask_app = Flask(__name__)
 @flask_app.route('/')
 def index():
     frame = frame_holder.get('frame', offline_bytes)
+    logger.debug(f"index(): frame={'placeholder' if frame == offline_bytes else 'live'}, last_pts={last_pts}, "
+                 f"duplicate_frame_count={duplicate_frame_count}, freeze_detected_time={freeze_detected_time}")
     if frame == offline_bytes:
         status = "Disconnected" if last_pts is None else "Frozen"
     else:
         status = "Live"
     
     last_frame_time = time.ctime(time.time()) if last_pts else "N/A"
+    logger.debug(f"index(): status={status}, last_frame_time={last_frame_time}")
     return render_template('index.html', stream_status=status, last_frame_time=last_frame_time)
 
 @flask_app.route('/video_feed')
 def video_feed():
     return Response(gen_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
-
 
 last_pts = None
 freeze_detected_time = None
@@ -111,64 +111,36 @@ def gen_frames():
 
     while True:
         time.sleep(0.02)
-
-        frame = frame_holder.get('frame', offline_bytes)  # Default to placeholder
+        frame = frame_holder.get('frame', offline_bytes)
+        logger.debug(f"gen_frames(): frame={'placeholder' if frame == offline_bytes else 'live'}, last_pts={last_pts}")
+        
         if isinstance(frame, bytes):
-            frame_bytes = frame  # Already pre-encoded placeholder
+            frame_bytes = frame
+            logger.debug("gen_frames(): Yielding placeholder image")
         else:
-            # Normal video frame processing
+            logger.debug(f"gen_frames(): Processing live frame, pts={frame.pts}")
             if last_pts is None or frame.pts != last_pts:
                 last_pts = frame.pts
                 freeze_detected_time = None
                 duplicate_frame_count = 0
-
+                logger.debug(f"gen_frames(): New frame, last_pts updated to {last_pts}")
                 img = frame.to_ndarray(format="bgr24")
                 ret, buffer = cv2.imencode('.jpg', img)
                 frame_bytes = buffer.tobytes()
             else:
                 if freeze_detected_time is None:
                     freeze_detected_time = time.time()
+                    logger.debug(f"gen_frames(): Duplicate frame detected, freeze_detected_time set to {freeze_detected_time}")
                 elif duplicate_frame_count > duplicate_threshold or time.time() - freeze_detected_time > freeze_threshold:
-                    frame_bytes = offline_bytes  # Stream frozen, switch to placeholder
+                    frame_bytes = offline_bytes
+                    logger.debug(f"gen_frames(): Switching to placeholder, duplicates={duplicate_frame_count}, "
+                                 f"time elapsed={time.time() - freeze_detected_time}")
                 else:
                     duplicate_frame_count += 1
+                    logger.debug(f"gen_frames(): Duplicate frame, count={duplicate_frame_count}")
 
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-
-# def gen_frames():
-#     global last_pts, freeze_detected_time, duplicate_frame_count
-#
-#     while True:
-#         time.sleep(0.02)
-#         frame = frame_holder.get('frame', None)
-#
-#         if frame is not None:
-#             if last_pts is None or frame.pts != last_pts:
-#                 # New frame detected, reset freeze timer and duplicate count
-#                 last_pts = frame.pts
-#                 freeze_detected_time = None
-#                 duplicate_frame_count = 0
-#                 # logger.info("✅ Streaming live frame")
-#
-#                 img = frame.to_ndarray(format="bgr24")
-#                 ret, buffer = cv2.imencode('.jpg', img)
-#                 frame_bytes = buffer.tobytes()
-#             else:
-#                 if freeze_detected_time is None:
-#                     freeze_detected_time = time.time()
-#                 elif duplicate_frame_count > duplicate_threshold or time.time() - freeze_detected_time > freeze_threshold:
-#                     # logger.warning("🚨 Stream frozen, displaying placeholder image")
-#                     frame_bytes = offline_bytes
-#                 else:
-#                     duplicate_frame_count += 1
-#                     # logger.info(f"⚠️ Duplicate frame detected: {duplicate_frame_count}")
-#
-#             yield (b'--frame\r\n'
-#                    b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-#         else:
-#             logger.debug("Waiting for first frame...")
-#             time.sleep(0.01)
 
 def start_flask():
     flask_app.logger.setLevel(logging.INFO)
