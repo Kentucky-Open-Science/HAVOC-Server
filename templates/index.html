@@ -22,9 +22,7 @@
 
     <!-- Stream and Status Container -->
     <div class="max-w-2xl w-full p-4 bg-white rounded shadow">
-        <div id="video-container">
-            <img id="video-feed" src="{{ url_for('video_feed') }}" alt="Video Stream" class="w-full h-auto" width="640" height="480">
-        </div>
+        <img src="{{ url_for('video_feed') }}" alt="Video Stream" class="w-full h-auto" width="640" height="480">
         <div class="mt-2 text-center">
             <p class="text-lg">Stream: <span id="stream_status">{{ stream_status }}</span></p>
             <p class="text-sm text-gray-600">Last Frame: <span id="last_frame_time">{{ last_frame_time }}</span></p>
@@ -33,68 +31,18 @@
 
     <!-- JavaScript for Dynamic Updates -->
     <script>
-        const videoContainer = document.getElementById('video-container');
-        let isStreamLive = false;
-        let retryInterval;
-
-        // Function to update status and check stream state
         function updateStatus() {
             fetch('/status')
                 .then(response => response.json())
                 .then(data => {
                     document.getElementById('stream_status').innerText = data.stream_status;
                     document.getElementById('last_frame_time').innerText = data.last_frame_time;
-                    
-                    // Stream is live if status is "Live" and last_frame_time is not "N/A"
-                    if (data.stream_status === "Live" && data.last_frame_time !== "N/A") {
-                        if (!isStreamLive) {
-                            console.log('Stream confirmed live, stopping retries');
-                            isStreamLive = true;
-                            clearInterval(retryInterval); // Stop retrying
-                        }
-                    } else {
-                        console.log(`Stream not yet live: status=${data.stream_status}, last_frame_time=${data.last_frame_time}`);
-                    }
                 })
                 .catch(error => console.error('Error fetching status:', error));
         }
-
-        // Function to reload video feed
-        function reloadVideoFeed() {
-            if (!isStreamLive) {
-                console.log('Retrying video feed...');
-                // Remove existing img and recreate it to force a fresh connection
-                const oldVideoFeed = document.getElementById('video-feed');
-                if (oldVideoFeed) {
-                    oldVideoFeed.remove();
-                }
-                const newVideoFeed = document.createElement('img');
-                newVideoFeed.id = 'video-feed';
-                newVideoFeed.src = "{{ url_for('video_feed') }}?" + new Date().getTime();
-                newVideoFeed.alt = 'Video Stream';
-                newVideoFeed.className = 'w-full h-auto';
-                newVideoFeed.width = 640;
-                newVideoFeed.height = 480;
-                videoContainer.appendChild(newVideoFeed);
-
-                // Add event listeners to the new img
-                newVideoFeed.onerror = function() {
-                    console.log('Video feed failed to load');
-                    isStreamLive = false;
-                };
-                newVideoFeed.onload = function() {
-                    console.log('Video feed loaded successfully');
-                };
-            }
-        }
-
-        // Poll status every second
-        setInterval(updateStatus, 1000);
-        // Retry video feed every 2 seconds until live
-        retryInterval = setInterval(reloadVideoFeed, 2000);
-        // Initial calls
+        setInterval(updateStatus, 1000); // Update every second
+        // Initial call to populate status immediately
         updateStatus();
-        reloadVideoFeed();
     </script>
 </body>
 </html>
