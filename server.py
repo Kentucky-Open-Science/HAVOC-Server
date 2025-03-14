@@ -4,7 +4,7 @@ import logging
 from aiohttp import web
 from aiortc import MediaStreamTrack, RTCPeerConnection, RTCSessionDescription
 from aiortc.contrib.media import MediaRelay
-from flask import Flask, Response, render_template, Response, jsonify
+from flask import Flask, Response, render_template, jsonify
 import threading
 import time
 from datetime import datetime
@@ -15,7 +15,7 @@ logger = logging.getLogger("temi-stream")
 
 relay = MediaRelay()
 pcs = set()
-frame_holder = {'frame': None}
+frame_holder = {'frame': None}  # Single definition for frame_holder
 
 # -------- aiohttp WebRTC server ----------
 app = web.Application()
@@ -67,18 +67,10 @@ async def offer(request):
 
 app.router.add_post("/offer", offer)
 
-async def start_aiohttp():
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, host='0.0.0.0', port=5000)
-    await site.start()
-    logger.info("🚀 aiohttp signaling server started on http://0.0.0.0:5000")
-
 # -------- Flask video feed server ----------
-app = Flask(__name__)
+flask_app = Flask(__name__)  # Renamed to flask_app to avoid conflict
 
-# Global variables (assumed from your setup)
-frame_holder = {}
+# Global variables
 last_pts = None
 freeze_detected_time = None
 duplicate_frame_count = 0
@@ -86,7 +78,7 @@ duplicate_threshold = 5  # Example value
 freeze_threshold = 5.0  # Seconds
 offline_bytes = b"..."  # Placeholder image bytes
 
-@app.route('/')
+@flask_app.route('/')
 def index():
     frame = frame_holder.get('frame', offline_bytes)
     current_time = time.time()
@@ -113,7 +105,7 @@ def index():
     
     return render_template('index.html', stream_status=stream_status, last_frame_time=last_frame_time)
 
-@app.route('/status')
+@flask_app.route('/status')
 def get_status():
     frame = frame_holder.get('frame', offline_bytes)
     current_time = time.time()
@@ -135,10 +127,9 @@ def get_status():
     
     return jsonify({'stream_status': stream_status, 'last_frame_time': last_frame_time})
 
-@app.route('/video_feed')
+@flask_app.route('/video_feed')
 def video_feed():
     return Response(gen_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
-
 
 def gen_frames():
     global last_pts, freeze_detected_time, duplicate_frame_count
@@ -176,18 +167,11 @@ def gen_frames():
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
 
-def start_flask():
-    app.logger.setLevel(logging.INFO)
-    app.logger.info("Starting Flask server on http://0.0.0.0:8133")
-    app.run(host='0.0.0.0', port=8133, debug=False, use_reloader=False, threaded=True)
-
 # -------- Main Execution ----------
 if __name__ == "__main__":
-    import threading
-
-    # Flask server
+    # Flask server in a thread
     flask_thread = threading.Thread(
-        target=lambda: app.run(host='0.0.0.0', port=8133, debug=False, use_reloader=False, threaded=True),
+        target=lambda: flask_app.run(host='0.0.0.0', port=8133, debug=False, use_reloader=False, threaded=True),
         daemon=True
     )
     flask_thread.start()
