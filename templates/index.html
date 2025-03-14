@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Video Stream</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+    <div class="max-w-2xl w-full p-4 bg-white rounded shadow">
+        <img src="/video_feed" alt="Video Stream" class="w-full h-auto">
+        <div class="mt-2 text-center">
+            <p class="text-lg">Stream: {{ stream_status }}</p>
+            <p class="text-sm text-gray-600">Last Frame: {{ last_frame_time }}</p>
+        </div>
+    </div>
+</body>
+</html>
