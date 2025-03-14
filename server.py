@@ -11,7 +11,8 @@ from datetime import datetime
 import numpy as np
 import os
 
-logging.basicConfig(level=logging.DEBUG)
+# Set logging to INFO level to reduce verbosity (DEBUG can be re-enabled for troubleshooting)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("temi-stream")
 
 relay = MediaRelay()
@@ -59,7 +60,9 @@ class VideoProcessorTrack(MediaStreamTrack):
     async def recv(self):
         frame = await self.track.recv()
         frame_holder['frame'] = frame
-        logger.debug(f"WebRTC recv: frame received, pts={frame.pts}, size={frame.width}x{frame.height}")
+        # Log only the first frame to confirm stream start
+        if last_pts is None:
+            logger.info(f"WebRTC stream started, first frame received, pts={frame.pts}")
         return frame
 
 async def create_peer_connection():
@@ -115,10 +118,7 @@ def index():
         else:
             stream_status = "Live"
     
-    logger.debug(f"index(): frame={'live' if not isinstance(frame, bytes) else 'placeholder'}, last_pts={last_pts}, "
-                 f"duplicate_frame_count={duplicate_frame_count}, freeze_detected_time={freeze_detected_time}")
-    logger.debug(f"index(): status={stream_status}, last_frame_time={last_frame_time}")
-    
+    # Removed repetitive debug logs
     return render_template('index.html', stream_status=stream_status, last_frame_time=last_frame_time)
 
 @flask_app.route('/status')
@@ -149,41 +149,38 @@ def gen_frames():
     while True:
         time.sleep(0.02)
         frame = frame_holder.get('frame', offline_bytes)
-        logger.debug(f"gen_frames(): frame={'placeholder' if frame == offline_bytes else 'live' if frame else 'none'}, last_pts={last_pts}")
         
         if isinstance(frame, bytes):
             frame_bytes = frame
-            logger.debug("gen_frames(): Yielding placeholder image")
+            # Log only on state change to Offline
+            if last_pts is not None:
+                logger.info("Stream switched to offline, yielding placeholder")
         elif frame is None:
             frame_bytes = offline_bytes
-            logger.debug("gen_frames(): No frame available yet, yielding placeholder")
         else:
-            logger.debug(f"gen_frames(): Processing live frame, pts={frame.pts}")
             if last_pts is None or frame.pts != last_pts:
                 last_pts = frame.pts
                 last_frame_time = datetime.now().strftime('%H:%M:%S')
                 freeze_detected_time = None
                 duplicate_frame_count = 0
-                logger.debug(f"gen_frames(): New frame, last_pts updated to {last_pts}")
                 img = frame.to_ndarray(format="bgr24")
                 ret, buffer = cv2.imencode('.jpg', img)
                 frame_bytes = buffer.tobytes()
             else:
                 if freeze_detected_time is None:
                     freeze_detected_time = time.time()
-                    logger.debug(f"gen_frames(): Duplicate frame detected, freeze_detected_time set to {freeze_detected_time}")
                 elif duplicate_frame_count > duplicate_threshold or time.time() - freeze_detected_time > freeze_threshold:
                     frame_bytes = offline_bytes
-                    logger.debug(f"gen_frames(): Switching to placeholder, duplicates={duplicate_frame_count}, "
-                                 f"time elapsed={time.time() - freeze_detected_time}")
+                    logger.info(f"Stream frozen, switching to placeholder after {duplicate_frame_count} duplicates, "
+                                f"time elapsed={time.time() - freeze_detected_time:.2f}s")
                 else:
                     duplicate_frame_count += 1
-                    logger.debug(f"gen_frames(): Duplicate frame, count={duplicate_frame_count}")
+                    # Log only on significant duplicate threshold
+                    if duplicate_frame_count == duplicate_threshold:
+                        logger.warning(f"Duplicate frames detected, count={duplicate_frame_count}")
 
-        logger.debug("gen_frames(): Yielding frame to client")
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-        logger.debug("gen_frames(): Frame yielded successfully")
 
 # -------- Main Execution ----------
 if __name__ == "__main__":
