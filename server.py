@@ -17,6 +17,15 @@ relay = MediaRelay()
 pcs = set()
 frame_holder = {'frame': None}
 
+# Global variables
+last_pts = None
+freeze_detected_time = None
+duplicate_frame_count = 0
+duplicate_threshold = 5
+freeze_threshold = 5.0
+offline_bytes = b"..."
+last_frame_time = "N/A"
+
 # -------- aiohttp WebRTC server ----------
 app = web.Application()
 
@@ -70,14 +79,6 @@ app.router.add_post("/offer", offer)
 # -------- Flask video feed server ----------
 flask_app = Flask(__name__)
 
-# Global variables
-last_pts = None
-freeze_detected_time = None
-duplicate_frame_count = 0
-duplicate_threshold = 5
-freeze_threshold = 5.0
-offline_bytes = b"..."
-
 @flask_app.route('/')
 def index():
     frame = frame_holder.get('frame', offline_bytes)
@@ -85,18 +86,14 @@ def index():
     
     if isinstance(frame, bytes):
         stream_status = "Offline"
-        last_frame_time = "N/A" if last_pts is None else datetime.fromtimestamp(last_pts / 90000).strftime('%H:%M:%S')
     else:
         if last_pts is None:
             stream_status = "Live"
-            last_frame_time = "N/A"
         elif freeze_detected_time and (duplicate_frame_count > duplicate_threshold or 
                                       current_time - freeze_detected_time > freeze_threshold):
             stream_status = "Frozen"
-            last_frame_time = datetime.fromtimestamp(last_pts / 90000).strftime('%H:%M:%S')
         else:
             stream_status = "Live"
-            last_frame_time = datetime.fromtimestamp(last_pts / 90000).strftime('%H:%M:%S')
     
     logger.debug(f"index(): frame={'live' if not isinstance(frame, bytes) else 'placeholder'}, last_pts={last_pts}, "
                  f"duplicate_frame_count={duplicate_frame_count}, freeze_detected_time={freeze_detected_time}")
@@ -111,18 +108,14 @@ def get_status():
     
     if isinstance(frame, bytes):
         stream_status = "Offline"
-        last_frame_time = "N/A" if last_pts is None else datetime.fromtimestamp(last_pts / 90000).strftime('%H:%M:%S')
     else:
         if last_pts is None:
             stream_status = "Live"
-            last_frame_time = "N/A"
         elif freeze_detected_time and (duplicate_frame_count > duplicate_threshold or 
                                       current_time - freeze_detected_time > freeze_threshold):
             stream_status = "Frozen"
-            last_frame_time = datetime.fromtimestamp(last_pts / 90000).strftime('%H:%M:%S')
         else:
             stream_status = "Live"
-            last_frame_time = datetime.fromtimestamp(last_pts / 90000).strftime('%H:%M:%S')
     
     return jsonify({'stream_status': stream_status, 'last_frame_time': last_frame_time})
 
@@ -131,7 +124,7 @@ def video_feed():
     return Response(gen_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 def gen_frames():
-    global last_pts, freeze_detected_time, duplicate_frame_count
+    global last_pts, freeze_detected_time, duplicate_frame_count, last_frame_time
 
     while True:
         time.sleep(0.02)
@@ -148,6 +141,7 @@ def gen_frames():
             logger.debug(f"gen_frames(): Processing live frame, pts={frame.pts}")
             if last_pts is None or frame.pts != last_pts:
                 last_pts = frame.pts
+                last_frame_time = datetime.now().strftime('%H:%M:%S')
                 freeze_detected_time = None
                 duplicate_frame_count = 0
                 logger.debug(f"gen_frames(): New frame, last_pts updated to {last_pts}")
