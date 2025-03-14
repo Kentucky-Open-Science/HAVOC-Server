@@ -9,6 +9,7 @@ import threading
 import time
 from datetime import datetime
 import numpy as np
+import os
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger("temi-stream")
@@ -23,7 +24,26 @@ freeze_detected_time = None
 duplicate_frame_count = 0
 duplicate_threshold = 5
 freeze_threshold = 5.0
-offline_bytes = b"..."
+
+# Load the filler image at startup
+filler_image_path = os.path.join('static', 'temiFace_screen_saver.png')
+if not os.path.exists(filler_image_path):
+    logger.error(f"Filler image not found at {filler_image_path}")
+    offline_bytes = b"..."  # Fallback if image is missing
+else:
+    filler_img = cv2.imread(filler_image_path)
+    if filler_img is None:
+        logger.error(f"Failed to load filler image from {filler_image_path}")
+        offline_bytes = b"..."
+    else:
+        ret, buffer = cv2.imencode('.jpg', filler_img)
+        if not ret:
+            logger.error("Failed to encode filler image to JPEG")
+            offline_bytes = b"..."
+        else:
+            offline_bytes = buffer.tobytes()
+            logger.info(f"Loaded filler image from {filler_image_path}, size={len(offline_bytes)} bytes")
+
 last_frame_time = "N/A"
 
 # -------- aiohttp WebRTC server ----------
@@ -160,8 +180,10 @@ def gen_frames():
                     duplicate_frame_count += 1
                     logger.debug(f"gen_frames(): Duplicate frame, count={duplicate_frame_count}")
 
+        logger.debug("gen_frames(): Yielding frame to client")
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+        logger.debug("gen_frames(): Frame yielded successfully")
 
 # -------- Main Execution ----------
 if __name__ == "__main__":
