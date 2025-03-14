@@ -80,18 +80,14 @@ flask_app = Flask(__name__)
 
 @flask_app.route('/')
 def index():
-    # Determine stream status based on frame_holder and freeze logic
     frame = frame_holder.get('frame', offline_bytes)
     if frame == offline_bytes:
-        status = "Disconnected"
-    elif last_pts is not None and (duplicate_frame_count > duplicate_threshold or (freeze_detected_time and time.time() - freeze_detected_time > freeze_threshold)):
-        status = "Frozen"
+        status = "Disconnected" if last_pts is None else "Frozen"
     else:
         status = "Live"
     
     last_frame_time = time.ctime(time.time()) if last_pts else "N/A"
     return render_template('index.html', stream_status=status, last_frame_time=last_frame_time)
-
 @flask_app.route('/video_feed')
 def video_feed():
     return Response(gen_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
