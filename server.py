@@ -10,12 +10,12 @@ import time
 from datetime import datetime
 import numpy as np
 
-logging.basicConfig(level=logging.DEBUG)  # Changed to DEBUG for detailed logs
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger("temi-stream")
 
 relay = MediaRelay()
 pcs = set()
-frame_holder = {'frame': None}  # Single definition for frame_holder
+frame_holder = {'frame': None}
 
 # -------- aiohttp WebRTC server ----------
 app = web.Application()
@@ -68,26 +68,25 @@ async def offer(request):
 app.router.add_post("/offer", offer)
 
 # -------- Flask video feed server ----------
-flask_app = Flask(__name__)  # Renamed to flask_app to avoid conflict
+flask_app = Flask(__name__)
 
 # Global variables
 last_pts = None
 freeze_detected_time = None
 duplicate_frame_count = 0
-duplicate_threshold = 5  # Example value
-freeze_threshold = 5.0  # Seconds
-offline_bytes = b"..."  # Placeholder image bytes
+duplicate_threshold = 5
+freeze_threshold = 5.0
+offline_bytes = b"..."
 
 @flask_app.route('/')
 def index():
     frame = frame_holder.get('frame', offline_bytes)
     current_time = time.time()
     
-    # Compute stream status
-    if isinstance(frame, bytes):  # Placeholder image
+    if isinstance(frame, bytes):
         stream_status = "Offline"
         last_frame_time = "N/A" if last_pts is None else datetime.fromtimestamp(last_pts / 90000).strftime('%H:%M:%S')
-    else:  # Live frame
+    else:
         if last_pts is None:
             stream_status = "Live"
             last_frame_time = "N/A"
@@ -137,11 +136,14 @@ def gen_frames():
     while True:
         time.sleep(0.02)
         frame = frame_holder.get('frame', offline_bytes)
-        logger.debug(f"gen_frames(): frame={'placeholder' if frame == offline_bytes else 'live'}, last_pts={last_pts}")
+        logger.debug(f"gen_frames(): frame={'placeholder' if frame == offline_bytes else 'live' if frame else 'none'}, last_pts={last_pts}")
         
         if isinstance(frame, bytes):
             frame_bytes = frame
             logger.debug("gen_frames(): Yielding placeholder image")
+        elif frame is None:
+            frame_bytes = offline_bytes
+            logger.debug("gen_frames(): No frame available yet, yielding placeholder")
         else:
             logger.debug(f"gen_frames(): Processing live frame, pts={frame.pts}")
             if last_pts is None or frame.pts != last_pts:
@@ -169,22 +171,18 @@ def gen_frames():
 
 # -------- Main Execution ----------
 if __name__ == "__main__":
-    # Flask server in a thread
     flask_thread = threading.Thread(
         target=lambda: flask_app.run(host='0.0.0.0', port=8133, debug=False, use_reloader=False, threaded=True),
         daemon=True
     )
     flask_thread.start()
 
-    # aiohttp signaling server
     async def aiohttp_main():
         runner = web.AppRunner(app)
         await runner.setup()
         site = web.TCPSite(runner, host='0.0.0.0', port=5432)
         await site.start()
         logger.info("🚀 aiohttp signaling server started on http://0.0.0.0:5432")
-
-        # Run indefinitely
         while True:
             await asyncio.sleep(3600)
 
