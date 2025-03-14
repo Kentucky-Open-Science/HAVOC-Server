@@ -88,6 +88,7 @@ def index():
     
     last_frame_time = time.ctime(time.time()) if last_pts else "N/A"
     return render_template('index.html', stream_status=status, last_frame_time=last_frame_time)
+
 @flask_app.route('/video_feed')
 def video_feed():
     return Response(gen_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
@@ -135,7 +136,6 @@ def gen_frames():
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
 
-#
 # def gen_frames():
 #     global last_pts, freeze_detected_time, duplicate_frame_count
 #
@@ -169,7 +169,6 @@ def gen_frames():
 #         else:
 #             logger.debug("Waiting for first frame...")
 #             time.sleep(0.01)
-
 
 def start_flask():
     flask_app.logger.setLevel(logging.INFO)
