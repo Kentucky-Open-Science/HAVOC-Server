@@ -1,35 +1,23 @@
 <!DOCTYPE html>
-<html lang="en">
-
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>Video Stream</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>Stream Monitor</title>
+    <script>
+        function updateStatus() {
+            fetch('/status')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('stream_status').innerText = data.stream_status;
+                    document.getElementById('last_frame_time').innerText = data.last_frame_time;
+                });
+        }
+        setInterval(updateStatus, 1000); // Update every second
+    </script>
 </head>
-
-<body class="bg-gray-100 flex flex-col items-center min-h-screen">
-    <!-- ASCII Art Header (Outside the box) -->
-    <div class="ascii-art text-center mb-4">
-        <pre class="text-xl font-mono text-gray-700">
-╔══════════════════════════════════════════════════════════════════════════════════╗
-║  ████████╗███████╗███╗   ███╗██╗    ██████╗  ██████╗ ██████╗  ██████╗ ████████╗  ║
-║  ╚══██╔══╝██╔════╝████╗ ████║██║    ██╔══██╗██╔═══██╗██╔══██╗██╔═══██╗╚══██╔══╝  ║
-║     ██║   █████╗  ██╔████╔██║██║    ██████╔╝██║   ██║██████╔╝██║   ██║   ██║     ║
-║     ██║   ██╔══╝  ██║╚██╔╝██║██║    ██╔══██╗██║   ██║██╔══██╗██║   ██║   ██║     ║
-║     ██║   ███████╗██║ ╚═╝ ██║██║    ██║  ██║╚██████╔╝██████╔╝╚██████╔╝   ██║     ║
-║     ╚═╝   ╚══════╝╚═╝     ╚═╝╚═╝    ╚═╝  ╚═╝ ╚═════╝ ╚═════╝  ╚═════╝    ╚═╝     ║
-╚══════════════════════════════════════════════════════════════════════════════════╝
-        </pre>
-    </div>
-
-    <!-- Stream and Status Container -->
-    <div class="max-w-2xl w-full p-4 bg-white rounded shadow">
-        <img src="/video_feed" alt="Video Stream" class="w-full h-auto">
-        <div class="mt-2 text-center">
-            <p class="text-lg">Stream: {{ stream_status }}</p>
-            <p class="text-sm text-gray-600">Last Frame: {{ last_frame_time }}</p>
-        </div>
-    </div>
+<body>
+    <h1>Stream Monitor</h1>
+    <img src="{{ url_for('video_feed') }}" width="640" height="480">
+    <p>Stream Status: <span id="stream_status">{{ stream_status }}</span></p>
+    <p>Last Frame Time: <span id="last_frame_time">{{ last_frame_time }}</span></p>
 </body>
-
 </html>

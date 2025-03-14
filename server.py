@@ -4,9 +4,10 @@ import logging
 from aiohttp import web
 from aiortc import MediaStreamTrack, RTCPeerConnection, RTCSessionDescription
 from aiortc.contrib.media import MediaRelay
-from flask import Flask, Response, render_template
+from flask import Flask, Response, render_template, Response, jsonify
 import threading
 import time
+from datetime import datetime
 import numpy as np
 
 logging.basicConfig(level=logging.DEBUG)  # Changed to DEBUG for detailed logs
@@ -74,38 +75,71 @@ async def start_aiohttp():
     logger.info("🚀 aiohttp signaling server started on http://0.0.0.0:5000")
 
 # -------- Flask video feed server ----------
-flask_app = Flask(__name__)
+app = Flask(__name__)
 
-@flask_app.route('/')
+# Global variables (assumed from your setup)
+frame_holder = {}
+last_pts = None
+freeze_detected_time = None
+duplicate_frame_count = 0
+duplicate_threshold = 5  # Example value
+freeze_threshold = 5.0  # Seconds
+offline_bytes = b"..."  # Placeholder image bytes
+
+@app.route('/')
 def index():
     frame = frame_holder.get('frame', offline_bytes)
-    logger.debug(f"index(): frame={'placeholder' if frame == offline_bytes else 'live'}, last_pts={last_pts}, "
-                 f"duplicate_frame_count={duplicate_frame_count}, freeze_detected_time={freeze_detected_time}")
-    if frame == offline_bytes:
-        status = "Disconnected" if last_pts is None else "Frozen"
-    else:
-        status = "Live"
+    current_time = time.time()
     
-    last_frame_time = time.ctime(time.time()) if last_pts else "N/A"
-    logger.debug(f"index(): status={status}, last_frame_time={last_frame_time}")
-    return render_template('index.html', stream_status=status, last_frame_time=last_frame_time)
+    # Compute stream status
+    if isinstance(frame, bytes):  # Placeholder image
+        stream_status = "Offline"
+        last_frame_time = "N/A" if last_pts is None else datetime.fromtimestamp(last_pts / 90000).strftime('%H:%M:%S')
+    else:  # Live frame
+        if last_pts is None:
+            stream_status = "Live"
+            last_frame_time = "N/A"
+        elif freeze_detected_time and (duplicate_frame_count > duplicate_threshold or 
+                                      current_time - freeze_detected_time > freeze_threshold):
+            stream_status = "Frozen"
+            last_frame_time = datetime.fromtimestamp(last_pts / 90000).strftime('%H:%M:%S')
+        else:
+            stream_status = "Live"
+            last_frame_time = datetime.fromtimestamp(last_pts / 90000).strftime('%H:%M:%S')
+    
+    logger.debug(f"index(): frame={'live' if not isinstance(frame, bytes) else 'placeholder'}, last_pts={last_pts}, "
+                 f"duplicate_frame_count={duplicate_frame_count}, freeze_detected_time={freeze_detected_time}")
+    logger.debug(f"index(): status={stream_status}, last_frame_time={last_frame_time}")
+    
+    return render_template('index.html', stream_status=stream_status, last_frame_time=last_frame_time)
 
-@flask_app.route('/video_feed')
+@app.route('/status')
+def get_status():
+    frame = frame_holder.get('frame', offline_bytes)
+    current_time = time.time()
+    
+    if isinstance(frame, bytes):
+        stream_status = "Offline"
+        last_frame_time = "N/A" if last_pts is None else datetime.fromtimestamp(last_pts / 90000).strftime('%H:%M:%S')
+    else:
+        if last_pts is None:
+            stream_status = "Live"
+            last_frame_time = "N/A"
+        elif freeze_detected_time and (duplicate_frame_count > duplicate_threshold or 
+                                      current_time - freeze_detected_time > freeze_threshold):
+            stream_status = "Frozen"
+            last_frame_time = datetime.fromtimestamp(last_pts / 90000).strftime('%H:%M:%S')
+        else:
+            stream_status = "Live"
+            last_frame_time = datetime.fromtimestamp(last_pts / 90000).strftime('%H:%M:%S')
+    
+    return jsonify({'stream_status': stream_status, 'last_frame_time': last_frame_time})
+
+@app.route('/video_feed')
 def video_feed():
     return Response(gen_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
-last_pts = None
-freeze_detected_time = None
-freeze_threshold = 10  # Seconds before switching to a placeholder
-duplicate_threshold = 20  # Number of duplicate frames before switching to a placeholder
-duplicate_frame_count = 0
 
-# read in the offline image
-offline_img = cv2.imread("static/temiFace_screen_saver.png")
-ret, placeholder_buffer = cv2.imencode('.png', offline_img)
-offline_bytes = placeholder_buffer.tobytes()
-
-frame_holder['frame'] = offline_bytes  # Store bytes instead of None
 def gen_frames():
     global last_pts, freeze_detected_time, duplicate_frame_count
 
@@ -143,9 +177,9 @@ def gen_frames():
                b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
 
 def start_flask():
-    flask_app.logger.setLevel(logging.INFO)
-    flask_app.logger.info("Starting Flask server on http://0.0.0.0:8133")
-    flask_app.run(host='0.0.0.0', port=8133, debug=False, use_reloader=False, threaded=True)
+    app.logger.setLevel(logging.INFO)
+    app.logger.info("Starting Flask server on http://0.0.0.0:8133")
+    app.run(host='0.0.0.0', port=8133, debug=False, use_reloader=False, threaded=True)
 
 # -------- Main Execution ----------
 if __name__ == "__main__":
@@ -153,7 +187,7 @@ if __name__ == "__main__":
 
     # Flask server
     flask_thread = threading.Thread(
-        target=lambda: flask_app.run(host='0.0.0.0', port=8133, debug=False, use_reloader=False, threaded=True),
+        target=lambda: app.run(host='0.0.0.0', port=8133, debug=False, use_reloader=False, threaded=True),
         daemon=True
     )
     flask_thread.start()
