@@ -10,27 +10,30 @@ import time
 from datetime import datetime
 import numpy as np
 import os
+from fall_detector import FallDetector  # Import the FallDetector class
 
-# Set logging to INFO level to reduce verbosity (DEBUG can be re-enabled for troubleshooting)
+# Set logging to INFO level
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("temi-stream")
 
+# WebRTC globals
 relay = MediaRelay()
 pcs = set()
 frame_holder = {'frame': None}
 
-# Global variables
+# Frame processing globals
 last_pts = None
 freeze_detected_time = None
 duplicate_frame_count = 0
 duplicate_threshold = 5
 freeze_threshold = 5.0
+last_frame_time = "N/A"
 
-# Load the filler image at startup
+# Load offline placeholder image
 filler_image_path = os.path.join('static', 'temiFace_screen_saver.png')
 if not os.path.exists(filler_image_path):
     logger.error(f"Filler image not found at {filler_image_path}")
-    offline_bytes = b"..."  # Fallback if image is missing
+    offline_bytes = b"..."
 else:
     filler_img = cv2.imread(filler_image_path)
     if filler_img is None:
@@ -45,7 +48,8 @@ else:
             offline_bytes = buffer.tobytes()
             logger.info(f"Loaded filler image from {filler_image_path}, size={len(offline_bytes)} bytes")
 
-last_frame_time = "N/A"
+# Instantiate FallDetector globally
+fall_detector = FallDetector()
 
 # -------- aiohttp WebRTC server ----------
 app = web.Application()
@@ -60,7 +64,6 @@ class VideoProcessorTrack(MediaStreamTrack):
     async def recv(self):
         frame = await self.track.recv()
         frame_holder['frame'] = frame
-        # Log only the first frame to confirm stream start
         if last_pts is None:
             logger.info(f"WebRTC stream started, first frame received, pts={frame.pts}")
         return frame
@@ -89,12 +92,10 @@ async def create_peer_connection():
 async def offer(request):
     params = await request.json()
     offer = RTCSessionDescription(sdp=params["sdp"], type=params["type"])
-
     peer = await create_peer_connection()
     await peer.setRemoteDescription(offer)
     answer = await peer.createAnswer()
     await peer.setLocalDescription(answer)
-
     return web.json_response({"sdp": peer.localDescription.sdp, "type": peer.localDescription.type})
 
 app.router.add_post("/offer", offer)
@@ -106,7 +107,6 @@ flask_app = Flask(__name__)
 def index():
     frame = frame_holder.get('frame', offline_bytes)
     current_time = time.time()
-    
     if isinstance(frame, bytes):
         stream_status = "Offline"
     else:
@@ -117,15 +117,12 @@ def index():
             stream_status = "Frozen"
         else:
             stream_status = "Live"
-    
-    # Removed repetitive debug logs
     return render_template('index.html', stream_status=stream_status, last_frame_time=last_frame_time)
 
 @flask_app.route('/status')
 def get_status():
     frame = frame_holder.get('frame', offline_bytes)
     current_time = time.time()
-    
     if isinstance(frame, bytes):
         stream_status = "Offline"
     else:
@@ -136,7 +133,6 @@ def get_status():
             stream_status = "Frozen"
         else:
             stream_status = "Live"
-    
     return jsonify({'stream_status': stream_status, 'last_frame_time': last_frame_time})
 
 @flask_app.route('/video_feed')
@@ -152,7 +148,6 @@ def gen_frames():
         
         if isinstance(frame, bytes):
             frame_bytes = frame
-            # Log only on state change to Offline
             if last_pts is not None:
                 logger.info("Stream switched to offline, yielding placeholder")
         elif frame is None:
@@ -164,7 +159,9 @@ def gen_frames():
                 freeze_detected_time = None
                 duplicate_frame_count = 0
                 img = frame.to_ndarray(format="bgr24")
-                ret, buffer = cv2.imencode('.jpg', img)
+                # Process frame with fall detection
+                processed_img = fall_detector.process_frame(img)
+                ret, buffer = cv2.imencode('.jpg', processed_img)
                 frame_bytes = buffer.tobytes()
             else:
                 if freeze_detected_time is None:
@@ -175,9 +172,9 @@ def gen_frames():
                                 f"time elapsed={time.time() - freeze_detected_time:.2f}s")
                 else:
                     duplicate_frame_count += 1
-                    # Log only on significant duplicate threshold
                     if duplicate_frame_count == duplicate_threshold:
                         logger.warning(f"Duplicate frames detected, count={duplicate_frame_count}")
+                    # frame_bytes remains the last processed frame
 
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
