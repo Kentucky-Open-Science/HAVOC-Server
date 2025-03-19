@@ -74,13 +74,11 @@ async def create_peer_connection():
     @peer.on("track")
     async def on_track(track):
         if track.kind == "video":
-            codec_mime = getattr(track.codec, 'mimeType', '').lower()
-            if codec_mime := getattr(track, 'codec', None):
-                if codec := getattr(track, 'codec', None):
-                    codec_mime = codec.mimeType.lower()
-                    if codec_mime == 'video/rtx':
-                        logger.info("Ignoring RTX (retransmission) track.")
-                        return
+            codec = getattr(track, 'codec', None)
+            codec_mime = codec.mimeType.lower() if codec else ''
+            if codec_mime == 'video/rtx':
+                logger.info("Ignoring RTX (retransmission) track.")
+                return
 
             video_track = VideoProcessorTrack(relay.subscribe(track))
             peer.addTrack(video_track)
@@ -89,12 +87,15 @@ async def create_peer_connection():
                 try:
                     while True:
                         frame = await video_track.recv()
-                        # Optionally log or process the frame further here.
                         logger.debug("Frame consumed successfully.")
                 except Exception as e:
                     logger.error(f"Error consuming video track: {e}")
 
             asyncio.create_task(consume_track())
+
+    pcs.add(peer)
+    return peer  # <-- MAKE SURE THIS RETURN STATEMENT EXISTS!
+
 
 
 async def offer(request):
