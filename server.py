@@ -210,8 +210,10 @@ def gen_frames():
                 freeze_detected_time = None
                 duplicate_frame_count = 0
                 img = frame.to_ndarray(format="bgr24")
-                # Process frame with fall detection
-                processed_img = fall_detector.process_frame(img)
+                
+                # Define which process function to use
+                processed_img = fall_detector.test_process_frame_pose(img)
+                
                 ret, buffer = cv2.imencode('.jpg', processed_img)
                 frame_bytes = buffer.tobytes()
             else:
