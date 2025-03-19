@@ -212,7 +212,7 @@ def gen_frames():
                 img = frame.to_ndarray(format="bgr24")
                 
                 # Define which process function to use
-                processed_img = fall_detector.test_process_frame_pose(img)
+                processed_img = fall_detector.test_process_frame_pose_fall(img)
                 
                 ret, buffer = cv2.imencode('.jpg', processed_img)
                 frame_bytes = buffer.tobytes()
