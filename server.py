@@ -10,7 +10,7 @@ import time
 from datetime import datetime
 import numpy as np
 import os
-from fall_detector import FallDetector  # Import the FallDetector class
+from yolo_fall_detection import FallDetector  # Import the FallDetector class
 
 # Set logging to INFO level
 logging.basicConfig(level=logging.INFO)
