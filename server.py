@@ -100,28 +100,53 @@ async def create_peer_connection():
 
 async def offer(request):
     params = await request.json()
-    offer = RTCSessionDescription(sdp=params["sdp"], type=params["type"])
+    original_offer_sdp = params["sdp"]
+    offer_type = params["type"]
 
-    # Parse SDP to remove RTX codecs explicitly
-    parsed_sdp = SDPDescription.parse(offer.sdp)
-    for media in parsed_sdp.media:
-        # remove RTX (video/rtx) payloads explicitly
-        media.rtp = [rtp for rtp in media.rtp if rtp.codec.lower() != 'rtx']
-        media.fmtp = [fmtp for fmtp in media.fmtp if fmtp.payload_type in {rtp.payload_type for rtp in media.rtp}]
-        media.payloads = ' '.join(str(rtp.payload_type) for rtp in media.rtp)
+    # Manually remove all RTX lines from SDP
+    sdp_lines = original_offer_sdp.splitlines()
+    filtered_sdp_lines = []
+    skip_payload_types = set()
 
-    # Rebuild offer SDP without RTX
-    offer_no_rtx = RTCSessionDescription(
-        sdp=parsed_sdp.serialize(),
-        type=offer.type
-    )
+    for line in sdp_lines:
+        if 'a=rtpmap' in line and 'rtx' in line.lower():
+            # Extract RTX payload type to skip it later
+            payload_type = line.split(' ')[0].split(':')[1]
+            skip_payload_types.add(payload_type)
+            continue  # skip adding RTX lines directly
+        if line.startswith('a=fmtp:'):
+            fmtp_payload_type = line.split(' ')[0].split(':')[1]
+            if fmtp_payload_type in skip_payload_types:
+                continue  # skip RTX fmtp lines
+        filtered_sdp_lines.append(line)
+
+    # Remove RTX payload types from m=video line payload types
+    final_sdp_lines = []
+    for line in filtered_sdp_lines:
+        if line.startswith('m=video'):
+            parts = line.split(' ')
+            # Keep payload types that are not in skip_payload_types
+            m_line_payload_types = [pt for pt in parts[3:] if pt not in skip_payload_types]
+            new_m_line = ' '.join(parts[:3] + m_line_payload_types)
+            final_sdp_lines.append(new_m_line)
+        else:
+            final_sdp_lines.append(line)
+
+    cleaned_offer_sdp = '\r\n'.join(final_sdp_lines) + '\r\n'
+
+    # Use cleaned offer without RTX payloads
+    offer = RTCSessionDescription(sdp=cleaned_offer_sdp, type=offer_type)
 
     peer = await create_peer_connection()
-    await peer.setRemoteDescription(offer_no_rtx)
+    await peer.setRemoteDescription(offer)
     answer = await peer.createAnswer()
     await peer.setLocalDescription(answer)
 
-    return web.json_response({"sdp": peer.localDescription.sdp, "type": peer.localDescription.type})
+    return web.json_response({
+        "sdp": peer.localDescription.sdp,
+        "type": peer.localDescription.type
+    })
+
 
 
 app.router.add_post("/offer", offer)
