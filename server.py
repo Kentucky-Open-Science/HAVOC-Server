@@ -10,10 +10,12 @@ import time
 from datetime import datetime
 import numpy as np
 import os
+from aiortc.sdp import candidate_from_sdp, candidate_to_sdp, SessionDescription as SDPDescription
+
 from yolo_fall_detection import FallDetector  # Import the FallDetector class
 
 # Set logging to INFO level
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger("temi-stream")
 
 # WebRTC globals
@@ -74,29 +76,78 @@ async def create_peer_connection():
     @peer.on("track")
     async def on_track(track):
         if track.kind == "video":
-            processor = VideoProcessorTrack(relay.subscribe(track))
+            codec = getattr(track, 'codec', None)
+            codec_mime = codec.mimeType.lower() if codec else ''
+            if codec_mime == 'video/rtx':
+                logger.info("Ignoring RTX (retransmission) track.")
+                return
+
+            video_track = VideoProcessorTrack(relay.subscribe(track))
+            peer.addTrack(video_track)
 
             async def consume_track():
                 try:
                     while True:
-                        frame = await processor.recv()
-                        frame_holder['frame'] = frame
+                        frame = await video_track.recv()
+                        logger.debug("Frame consumed successfully.")
                 except Exception as e:
-                    logger.error(f"Error consuming track: {e}")
+                    logger.error(f"Error consuming video track: {e}")
 
             asyncio.create_task(consume_track())
 
     pcs.add(peer)
-    return peer
+    return peer  # <-- MAKE SURE THIS RETURN STATEMENT EXISTS!
 
 async def offer(request):
     params = await request.json()
-    offer = RTCSessionDescription(sdp=params["sdp"], type=params["type"])
+    original_offer_sdp = params["sdp"]
+    offer_type = params["type"]
+
+    # Manually remove all RTX lines from SDP
+    sdp_lines = original_offer_sdp.splitlines()
+    filtered_sdp_lines = []
+    skip_payload_types = set()
+
+    for line in sdp_lines:
+        if 'a=rtpmap' in line and 'rtx' in line.lower():
+            # Extract RTX payload type to skip it later
+            payload_type = line.split(' ')[0].split(':')[1]
+            skip_payload_types.add(payload_type)
+            continue  # skip adding RTX lines directly
+        if line.startswith('a=fmtp:'):
+            fmtp_payload_type = line.split(' ')[0].split(':')[1]
+            if fmtp_payload_type in skip_payload_types:
+                continue  # skip RTX fmtp lines
+        filtered_sdp_lines.append(line)
+
+    # Remove RTX payload types from m=video line payload types
+    final_sdp_lines = []
+    for line in filtered_sdp_lines:
+        if line.startswith('m=video'):
+            parts = line.split(' ')
+            # Keep payload types that are not in skip_payload_types
+            m_line_payload_types = [pt for pt in parts[3:] if pt not in skip_payload_types]
+            new_m_line = ' '.join(parts[:3] + m_line_payload_types)
+            final_sdp_lines.append(new_m_line)
+        else:
+            final_sdp_lines.append(line)
+
+    cleaned_offer_sdp = '\r\n'.join(final_sdp_lines) + '\r\n'
+
+    # Use cleaned offer without RTX payloads
+    offer = RTCSessionDescription(sdp=cleaned_offer_sdp, type=offer_type)
+
     peer = await create_peer_connection()
     await peer.setRemoteDescription(offer)
     answer = await peer.createAnswer()
     await peer.setLocalDescription(answer)
-    return web.json_response({"sdp": peer.localDescription.sdp, "type": peer.localDescription.type})
+
+    return web.json_response({
+        "sdp": peer.localDescription.sdp,
+        "type": peer.localDescription.type
+    })
+
+
 
 app.router.add_post("/offer", offer)
 
@@ -159,8 +210,10 @@ def gen_frames():
                 freeze_detected_time = None
                 duplicate_frame_count = 0
                 img = frame.to_ndarray(format="bgr24")
-                # Process frame with fall detection
-                processed_img = fall_detector.process_frame(img)
+                
+                # Define which process function to use
+                processed_img = fall_detector.test_process_frame_pose(img)
+                
                 ret, buffer = cv2.imencode('.jpg', processed_img)
                 frame_bytes = buffer.tobytes()
             else:
