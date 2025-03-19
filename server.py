@@ -10,10 +10,12 @@ import time
 from datetime import datetime
 import numpy as np
 import os
+from aiortc.sdp import candidate_from_sdp, candidate_to_sdp, SessionDescription as SDPDescription
+
 from yolo_fall_detection import FallDetector  # Import the FallDetector class
 
 # Set logging to INFO level
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger("temi-stream")
 
 # WebRTC globals
@@ -96,16 +98,31 @@ async def create_peer_connection():
     pcs.add(peer)
     return peer  # <-- MAKE SURE THIS RETURN STATEMENT EXISTS!
 
-
-
 async def offer(request):
     params = await request.json()
     offer = RTCSessionDescription(sdp=params["sdp"], type=params["type"])
+
+    # Parse SDP to remove RTX codecs explicitly
+    parsed_sdp = SDPDescription.parse(offer.sdp)
+    for media in parsed_sdp.media:
+        # remove RTX (video/rtx) payloads explicitly
+        media.rtp = [rtp for rtp in media.rtp if rtp.codec.lower() != 'rtx']
+        media.fmtp = [fmtp for fmtp in media.fmtp if fmtp.payload_type in {rtp.payload_type for rtp in media.rtp}]
+        media.payloads = ' '.join(str(rtp.payload_type) for rtp in media.rtp)
+
+    # Rebuild offer SDP without RTX
+    offer_no_rtx = RTCSessionDescription(
+        sdp=parsed_sdp.serialize(),
+        type=offer.type
+    )
+
     peer = await create_peer_connection()
-    await peer.setRemoteDescription(offer)
+    await peer.setRemoteDescription(offer_no_rtx)
     answer = await peer.createAnswer()
     await peer.setLocalDescription(answer)
+
     return web.json_response({"sdp": peer.localDescription.sdp, "type": peer.localDescription.type})
+
 
 app.router.add_post("/offer", offer)
 
