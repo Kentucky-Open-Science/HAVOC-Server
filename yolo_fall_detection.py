@@ -15,7 +15,7 @@ class FallDetector:
         """
         self.model = YOLO(model_path)
         self.conf_threshold = conf_threshold
-        self.UKBlue = (0, 51, 160)  # Bounding box color
+        self.UKBlue = (160, 51, 0)  # IN BGR
         self.classNames = ["person"]  # Only tracking people
         self.keypoints_labels = [
             "Nose", "Left Eye", "Right Eye", "Left Ear", "Right Ear",
@@ -55,10 +55,10 @@ class FallDetector:
                         fallen = True
                         
                         # # Text ontop of box
-                        # cv2.putText(img, "Fall Detected", (x1, y1 - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+                        # cv2.putText(img, "Fall Detected", (x1, y1 - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.UKBlue, 2)
 
                         # Text in top left corner
-                        cv2.putText(img, "Fall Detected", (20, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+                        cv2.putText(img, "Fall Detected", (20, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.UKBlue, 2)
 
         return img, fallen
     
@@ -165,10 +165,10 @@ class FallDetector:
                     x1, y1 = int(shoulder_avg[0]), int(shoulder_avg[1])
                     
                     # # Text on top of person
-                    # cv2.putText(img, "Fall Detected", (x1, y1 - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 3)
+                    # cv2.putText(img, "Fall Detected", (x1, y1 - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.UKBlue, 3)
                     
                     # Text in top right
-                    cv2.putText(img, "Fall Detected", (width - 150, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 3)
+                    cv2.putText(img, "Fall Detected", (width - 120, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.UKBlue, 3)
 
 
         return img, fallen
@@ -190,10 +190,10 @@ class FallDetector:
                 if valid_points and all(y > line_height for x, y in valid_points):
                     fallen = True
                     # #Text above line
-                    # cv2.putText(img, "Fall Detected", (30, line_height - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 255), 3)
+                    # cv2.putText(img, "Fall Detected", (30, line_height - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, self.UKBlue, 3)
                     
                     #Text in bottom left
-                    cv2.putText(img, "Fall Detected", (20, height - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 3)
+                    cv2.putText(img, "Fall Detected", (20, height - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.UKBlue, 3)
 
 
                 for x, y in valid_points:
@@ -216,7 +216,7 @@ class FallDetector:
 
         if box_fallen and pose_fallen and bottom_fallen:
             cv2.putText(combined_img, "PERSON IS FALLEN", (30, 50),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 3)
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, self.UKBlue, 3)
 
         return combined_img
 
