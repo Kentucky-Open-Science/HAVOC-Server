@@ -20,6 +20,7 @@ class FallDetector:
         self.White = (255, 255, 255)
         self.Golenrod = (0, 220, 255)
         self.Sunset = (96, 163, 255)
+        self.Red = (0, 0, 255)
         self.classNames = ["person"]  # Only tracking people
         self.keypoints_labels = [
             "Nose", "Left Eye", "Right Eye", "Left Ear", "Right Ear",
@@ -217,8 +218,8 @@ class FallDetector:
         combined_img = cv2.addWeighted(combined_img, 1, bottom_img, 0.34, 0)
 
         if box_fallen and pose_fallen and bottom_fallen:
-            cv2.putText(combined_img, "PERSON IS FALLEN", (30, 50),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, self.Sunset, 3)
+            cv2.putText(combined_img, "PERSON IS FALLEN", (35, 50),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, self.Red, 3)
 
         return combined_img
 
