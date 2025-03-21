@@ -19,6 +19,7 @@ class FallDetector:
         self.Bluegrass = (255, 138, 30)
         self.White = (255, 255, 255)
         self.Golenrod = (0, 220, 255)
+        self.Sunset = (96, 163, 255)
         self.classNames = ["person"]  # Only tracking people
         self.keypoints_labels = [
             "Nose", "Left Eye", "Right Eye", "Left Ear", "Right Ear",
@@ -111,7 +112,7 @@ class FallDetector:
                 for idx, (x, y) in enumerate(points):
                     if x == 0 and y == 0:
                         continue
-                    cv2.circle(img, (int(x), int(y)), 5, self.UKBlue, -1)
+                    cv2.circle(img, (int(x), int(y)), 5, self.Bluegrass, -1)
                     
                     # Print keypoints body labels
                     # cv2.putText(img, self.keypoints_labels[idx], (int(x) + 5, int(y) - 5), 
@@ -215,11 +216,9 @@ class FallDetector:
         combined_img = cv2.addWeighted(box_img, 0.33, pose_img, 0.33, 0)
         combined_img = cv2.addWeighted(combined_img, 1, bottom_img, 0.34, 0)
 
-
-
         if box_fallen and pose_fallen and bottom_fallen:
             cv2.putText(combined_img, "PERSON IS FALLEN", (30, 50),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, self.White, 3)
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, self.Sunset, 3)
 
         return combined_img
 
