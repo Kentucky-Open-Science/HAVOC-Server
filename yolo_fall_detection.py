@@ -159,9 +159,9 @@ class FallDetector:
 
 
                 cv2.putText(img, f"LS-LA: {dist_shoulder_ankle_L:.1f}", (int(required_points["LShoulder"][0]), int(required_points["LShoulder"][1]-10)),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.Bluegrass, 2)
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.UKBlue, 2)
                 cv2.putText(img, f"RS-RA: {dist_shoulder_ankle_R:.1f}", (int(required_points["RShoulder"][0]), int(required_points["RShoulder"][1]+20)),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.Bluegrass, 2)
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.UKBlue, 2)
 
                 # Determine fall
                 if (dist_shoulder_ankle_L < dist_shoulder_hip) or (dist_shoulder_ankle_R < dist_shoulder_hip):
