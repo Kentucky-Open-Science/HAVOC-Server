@@ -16,6 +16,9 @@ class FallDetector:
         self.model = YOLO(model_path)
         self.conf_threshold = conf_threshold
         self.UKBlue = (160, 51, 0)  # IN BGR
+        self.Bluegrass = (255, 138, 30)
+        self.White = (255, 255, 255)
+        self.Golenrod = (0, 220, 255)
         self.classNames = ["person"]  # Only tracking people
         self.keypoints_labels = [
             "Nose", "Left Eye", "Right Eye", "Left Ear", "Right Ear",
@@ -45,7 +48,7 @@ class FallDetector:
 
                     # Display label and confidence
                     label = f"{self.classNames[0]} {confidence:.2f}"
-                    cv2.putText(img, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.UKBlue, 2)
+                    cv2.putText(img, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.Bluegrass, 2)
 
                     height = y2 - y1
                     width = x2 - x1
@@ -89,7 +92,7 @@ class FallDetector:
                         #     "Left Wrist", "Right Wrist", "Left Hip", "Right Hip",
                         #     "Left Knee", "Right Knee", "Left Ankle", "Right Ankle"
                         # ][idx]
-                        # cv2.putText(img, joint_name, (x + 5, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.4, self.UKBlue, 1)
+                        # cv2.putText(img, joint_name, (x + 5, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.UKBlue, 1)
 
         return img
     
@@ -112,7 +115,7 @@ class FallDetector:
                     
                     # Print keypoints body labels
                     # cv2.putText(img, self.keypoints_labels[idx], (int(x) + 5, int(y) - 5), 
-                    #             cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 0), 1)
+                    #             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
 
                 # Fall detection logic with error handling
                 required_points_indices = [5, 6, 11, 12, 15, 16]
@@ -139,9 +142,9 @@ class FallDetector:
                 dist_shoulder_hip = math.sqrt((shoulder_avg[0] - hip_avg[0])**2 + (shoulder_avg[1] - hip_avg[1])**2)
 
                 # Visualization lines
-                cv2.line(img, tuple(shoulder_avg.astype(int)), tuple(hip_avg.astype(int)), (255, 255, 0), 2)
-                cv2.putText(img, f"S-H: {dist_shoulder_hip:.1f}", (int(shoulder_avg[0]), int(shoulder_avg[1]-10)),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 2)
+                cv2.line(img, tuple(shoulder_avg.astype(int)), tuple(hip_avg.astype(int)), self.Golenrod, 2)
+                cv2.putText(img, f"S-H: {dist_shoulder_hip:.1f}", (int(shoulder_avg[0]), int(shoulder_avg[1]-40)),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.Golenrod, 2)
 
 
                 # #line from ankle to shoulder
@@ -149,15 +152,15 @@ class FallDetector:
                 # cv2.line(img, tuple(required_points["RShoulder"].astype(int)), tuple(required_points["RAnkle"].astype(int)), (0, 255, 255), 2)
 
                 #line from ankle to vertical distance up calculated above to shoulder
-                cv2.line(img, tuple(required_points["LAnkle"].astype(int)), (int(required_points["LAnkle"][0]), int(required_points["LAnkle"][1] - dist_shoulder_ankle_L)), (0, 255, 255), 2)
-                cv2.line(img, tuple(required_points["RAnkle"].astype(int)), (int(required_points["RAnkle"][0]), int(required_points["RAnkle"][1] - dist_shoulder_ankle_R)), (0, 255, 255), 2)
+                cv2.line(img, tuple(required_points["LAnkle"].astype(int)), (int(required_points["LAnkle"][0]), int(required_points["LAnkle"][1] - dist_shoulder_ankle_L)), self.Golenrod, 2)
+                cv2.line(img, tuple(required_points["RAnkle"].astype(int)), (int(required_points["RAnkle"][0]), int(required_points["RAnkle"][1] - dist_shoulder_ankle_R)), self.Golenrod, 2)
 
 
 
                 cv2.putText(img, f"LS-LA: {dist_shoulder_ankle_L:.1f}", (int(required_points["LShoulder"][0]), int(required_points["LShoulder"][1]-10)),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
-                cv2.putText(img, f"RS-RA: {dist_shoulder_ankle_R:.1f}", (int(required_points["RShoulder"][0]), int(required_points["RShoulder"][1]-10)),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.Bluegrass, 2)
+                cv2.putText(img, f"RS-RA: {dist_shoulder_ankle_R:.1f}", (int(required_points["RShoulder"][0]), int(required_points["RShoulder"][1]+40)),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.Bluegrass, 2)
 
                 # Determine fall
                 if (dist_shoulder_ankle_L < dist_shoulder_hip) or (dist_shoulder_ankle_R < dist_shoulder_hip):
@@ -190,7 +193,7 @@ class FallDetector:
                 if valid_points and all(y > line_height for x, y in valid_points):
                     fallen = True
                     # #Text above line
-                    # cv2.putText(img, "Fall Detected", (30, line_height - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, self.UKBlue, 3)
+                    # cv2.putText(img, "Fall Detected", (30, line_height - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.UKBlue, 3)
                     
                     #Text in bottom left
                     cv2.putText(img, "Fall Detected", (20, height - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.UKBlue, 3)
@@ -216,7 +219,7 @@ class FallDetector:
 
         if box_fallen and pose_fallen and bottom_fallen:
             cv2.putText(combined_img, "PERSON IS FALLEN", (30, 50),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, self.UKBlue, 3)
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, self.White, 3)
 
         return combined_img
 
