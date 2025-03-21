@@ -1,4 +1,4 @@
 venv
 yolo_weights/
 codec_errors.log
-__pycache__
+__pycache__/
