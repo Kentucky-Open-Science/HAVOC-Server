@@ -173,16 +173,18 @@ class FallDetector:
         for r in results:
             for keypoints in r.keypoints.xy:
                 points = keypoints.cpu().numpy()
-                if all(y > line_height or y == 0 for x, y in points):
+                valid_points = [(x, y) for x, y in points if x != 0 or y != 0]
+
+                if valid_points and all(y > line_height for x, y in valid_points):
                     fallen = True
-                    cv2.putText(img, "Fall Detected (Bottom 3rd)", (30, line_height - 20),
+                    cv2.putText(img, "Fall Detected", (30, line_height - 20),
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 255), 3)
 
-                for x, y in points:
-                    if x and y:
-                        cv2.circle(img, (int(x), int(y)), 4, (255, 0, 255), -1)
+                for x, y in valid_points:
+                    cv2.circle(img, (int(x), int(y)), 4, (255, 0, 255), -1)
 
         return img, fallen
+
 
 
     def combined_frame(self, img):
