@@ -28,6 +28,8 @@ class FallDetector:
         """Processes a single frame, detects people, and labels falls."""
         results = self.model(img, stream=True, conf=self.conf_threshold)
         fallen = False
+        height, width, _ = img.shape
+
 
 
         for r in results:
@@ -51,8 +53,12 @@ class FallDetector:
                     # Check if fall is detected
                     if height - width < 0:
                         fallen = True
+                        
+                        # # Text ontop of box
+                        # cv2.putText(img, "Fall Detected", (x1, y1 - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
 
-                        cv2.putText(img, "Fall Detected", (x1, y1 - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+                        # Text in top left corner
+                        cv2.putText(img, "Fall Detected", (5, 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
 
         return img, fallen
     
@@ -90,7 +96,7 @@ class FallDetector:
     def test_process_frame_pose_fall(self, img):
         results = self.model(img, stream=True, conf=self.conf_threshold)
         fallen = False
-
+        height, width, _ = img.shape
 
         for r in results:
             for keypoints in r.keypoints.xy:
@@ -104,6 +110,7 @@ class FallDetector:
                         continue
                     cv2.circle(img, (int(x), int(y)), 5, (0, 255, 0), -1)
                     
+                    # Print keypoints body labels
                     # cv2.putText(img, self.keypoints_labels[idx], (int(x) + 5, int(y) - 5), 
                     #             cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 0), 1)
 
@@ -156,8 +163,13 @@ class FallDetector:
                 if (dist_shoulder_ankle_L < dist_shoulder_hip) or (dist_shoulder_ankle_R < dist_shoulder_hip):
                     fallen = True
                     x1, y1 = int(shoulder_avg[0]), int(shoulder_avg[1])
-                    cv2.putText(img, "Fall Detected", (x1, y1 - 30), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 3)
+                    
+                    # # Text on top of person
+                    # cv2.putText(img, "Fall Detected", (x1, y1 - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 3)
+                    
+                    # Text in top right
+                    cv2.putText(img, "Fall Detected", (width - 20, 5), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 3)
+
 
         return img, fallen
 
@@ -177,8 +189,12 @@ class FallDetector:
 
                 if valid_points and all(y > line_height for x, y in valid_points):
                     fallen = True
-                    cv2.putText(img, "Fall Detected", (30, line_height - 20),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 255), 3)
+                    # #Text above line
+                    # cv2.putText(img, "Fall Detected", (30, line_height - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 255), 3)
+                    
+                    #Text in bottom left
+                    cv2.putText(img, "Fall Detected", (5, height + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 255), 3)
+
 
                 for x, y in valid_points:
                     cv2.circle(img, (int(x), int(y)), 4, (255, 0, 255), -1)
@@ -188,6 +204,7 @@ class FallDetector:
 
 
     def combined_frame(self, img):
+        height, width, _ = img.shape
         box_img, box_fallen = self.test_process_frame_box(img.copy())
         pose_img, pose_fallen = self.test_process_frame_pose_fall(img.copy())
         bottom_img, bottom_fallen = self.bottom_frac_fall_detection(img.copy())
@@ -199,7 +216,7 @@ class FallDetector:
 
         if box_fallen and pose_fallen and bottom_fallen:
             cv2.putText(combined_img, "PERSON IS FALLEN", (30, 50),
-                        cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 3)
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 3)
 
         return combined_img
 
