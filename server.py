@@ -217,7 +217,7 @@ def gen_frames():
                 # Get processed images
                 box_img, box_fallen = fall_detector.test_process_frame_box(cv2.resize(img.copy(), (half_w, half_h)))
                 pose_img, pose_fallen = fall_detector.test_process_frame_pose_fall(cv2.resize(img.copy(), (half_w, half_h)))
-                bottom_img, bottom_fallen = fall_detector.bottom_third_fall_detection(cv2.resize(img.copy(), (half_w, half_h)))
+                bottom_img, bottom_fallen = fall_detector.bottom_frac_fall_detection(cv2.resize(img.copy(), (half_w, half_h)))
                 combined_img = fall_detector.combined_frame(cv2.resize(img.copy(), (half_w, half_h)))
 
                 # Combine into 2x2 grid

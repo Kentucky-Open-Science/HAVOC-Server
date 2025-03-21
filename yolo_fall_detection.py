@@ -161,9 +161,9 @@ class FallDetector:
 
         return img, fallen
 
-    def bottom_third_fall_detection(self, img):
+    def bottom_frac_fall_detection(self, img):
         height, width, _ = img.shape
-        line_height = int(height * 2 / 3)
+        line_height = int(height * 1 / 2)
 
         cv2.line(img, (0, line_height), (width, line_height), (255, 0, 255), 2)
 
@@ -188,7 +188,7 @@ class FallDetector:
     def combined_frame(self, img):
         box_img, box_fallen = self.test_process_frame_box(img.copy())
         pose_img, pose_fallen = self.test_process_frame_pose_fall(img.copy())
-        bottom_img, bottom_fallen = self.bottom_third_fall_detection(img.copy())
+        bottom_img, bottom_fallen = self.bottom_frac_fall_detection(img.copy())
 
         combined_img = cv2.addWeighted(box_img, 0.33, pose_img, 0.33, 0)
         combined_img = cv2.addWeighted(combined_img, 1, bottom_img, 0.34, 0)
