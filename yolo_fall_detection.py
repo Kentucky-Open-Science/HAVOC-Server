@@ -111,7 +111,7 @@ class FallDetector:
                 for idx, (x, y) in enumerate(points):
                     if x == 0 and y == 0:
                         continue
-                    cv2.circle(img, (int(x), int(y)), 5, (0, 255, 0), -1)
+                    cv2.circle(img, (int(x), int(y)), 5, self.UKBlue, -1)
                     
                     # Print keypoints body labels
                     # cv2.putText(img, self.keypoints_labels[idx], (int(x) + 5, int(y) - 5), 
@@ -159,7 +159,7 @@ class FallDetector:
 
                 cv2.putText(img, f"LS-LA: {dist_shoulder_ankle_L:.1f}", (int(required_points["LShoulder"][0]), int(required_points["LShoulder"][1]-10)),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.Bluegrass, 2)
-                cv2.putText(img, f"RS-RA: {dist_shoulder_ankle_R:.1f}", (int(required_points["RShoulder"][0]), int(required_points["RShoulder"][1]+40)),
+                cv2.putText(img, f"RS-RA: {dist_shoulder_ankle_R:.1f}", (int(required_points["RShoulder"][0]), int(required_points["RShoulder"][1]+20)),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.Bluegrass, 2)
 
                 # Determine fall
@@ -180,7 +180,7 @@ class FallDetector:
         height, width, _ = img.shape
         line_height = int(height * 1 / 2)
 
-        cv2.line(img, (0, line_height), (width, line_height), (255, 0, 255), 2)
+        cv2.line(img, (0, line_height), (width, line_height), self.UKBlue, 2)
 
         results = self.model(img, conf=self.conf_threshold)
         fallen = False
@@ -200,7 +200,7 @@ class FallDetector:
 
 
                 for x, y in valid_points:
-                    cv2.circle(img, (int(x), int(y)), 4, (255, 0, 255), -1)
+                    cv2.circle(img, (int(x), int(y)), 4, self.Bluegrass, -1)
 
         return img, fallen
 
