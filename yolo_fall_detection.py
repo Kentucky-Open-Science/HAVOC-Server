@@ -161,45 +161,45 @@ class FallDetector:
 
         return img, fallen
 
-def bottom_third_fall_detection(self, img):
-    height, width, _ = img.shape
-    line_height = int(height * 2 / 3)
+    def bottom_third_fall_detection(self, img):
+        height, width, _ = img.shape
+        line_height = int(height * 2 / 3)
 
-    cv2.line(img, (0, line_height), (width, line_height), (255, 0, 255), 2)
+        cv2.line(img, (0, line_height), (width, line_height), (255, 0, 255), 2)
 
-    results = self.model(img, conf=self.conf_threshold)
-    fallen = False
+        results = self.model(img, conf=self.conf_threshold)
+        fallen = False
 
-    for r in results:
-        for keypoints in r.keypoints.xy:
-            points = keypoints.cpu().numpy()
-            if all(y > line_height or y == 0 for x, y in points):
-                fallen = True
-                cv2.putText(img, "Fall Detected (Bottom 3rd)", (30, line_height - 20),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 255), 3)
+        for r in results:
+            for keypoints in r.keypoints.xy:
+                points = keypoints.cpu().numpy()
+                if all(y > line_height or y == 0 for x, y in points):
+                    fallen = True
+                    cv2.putText(img, "Fall Detected (Bottom 3rd)", (30, line_height - 20),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 255), 3)
 
-            for x, y in points:
-                if x and y:
-                    cv2.circle(img, (int(x), int(y)), 4, (255, 0, 255), -1)
+                for x, y in points:
+                    if x and y:
+                        cv2.circle(img, (int(x), int(y)), 4, (255, 0, 255), -1)
 
-    return img, fallen
-
-
-def combined_frame(self, img):
-    box_img, box_fallen = self.test_process_frame_box(img.copy())
-    pose_img, pose_fallen = self.test_process_frame_pose_fall(img.copy())
-    bottom_img, bottom_fallen = self.bottom_third_fall_detection(img.copy())
-
-    combined_img = cv2.addWeighted(box_img, 0.33, pose_img, 0.33, 0)
-    combined_img = cv2.addWeighted(combined_img, 1, bottom_img, 0.34, 0)
+        return img, fallen
 
 
+    def combined_frame(self, img):
+        box_img, box_fallen = self.test_process_frame_box(img.copy())
+        pose_img, pose_fallen = self.test_process_frame_pose_fall(img.copy())
+        bottom_img, bottom_fallen = self.bottom_third_fall_detection(img.copy())
 
-    if box_fallen and pose_fallen and bottom_fallen:
-        cv2.putText(combined_img, "PERSON IS FALLEN", (30, 50),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 3)
+        combined_img = cv2.addWeighted(box_img, 0.33, pose_img, 0.33, 0)
+        combined_img = cv2.addWeighted(combined_img, 1, bottom_img, 0.34, 0)
 
-    return combined_img
+
+
+        if box_fallen and pose_fallen and bottom_fallen:
+            cv2.putText(combined_img, "PERSON IS FALLEN", (30, 50),
+                        cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 3)
+
+        return combined_img
 
 
     def reset(self):
