@@ -58,7 +58,7 @@ class FallDetector:
                         # cv2.putText(img, "Fall Detected", (x1, y1 - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
 
                         # Text in top left corner
-                        cv2.putText(img, "Fall Detected", (5, 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+                        cv2.putText(img, "Fall Detected", (20, 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
 
         return img, fallen
     
@@ -165,10 +165,10 @@ class FallDetector:
                     x1, y1 = int(shoulder_avg[0]), int(shoulder_avg[1])
                     
                     # # Text on top of person
-                    # cv2.putText(img, "Fall Detected", (x1, y1 - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 3)
+                    # cv2.putText(img, "Fall Detected", (x1, y1 - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 3)
                     
                     # Text in top right
-                    cv2.putText(img, "Fall Detected", (width - 20, 5), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 3)
+                    cv2.putText(img, "Fall Detected", (width - 100, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 3)
 
 
         return img, fallen
@@ -193,7 +193,7 @@ class FallDetector:
                     # cv2.putText(img, "Fall Detected", (30, line_height - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 255), 3)
                     
                     #Text in bottom left
-                    cv2.putText(img, "Fall Detected", (5, height + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 255), 3)
+                    cv2.putText(img, "Fall Detected", (20, height - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 3)
 
 
                 for x, y in valid_points:
