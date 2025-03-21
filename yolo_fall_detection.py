@@ -58,7 +58,7 @@ class FallDetector:
                         # cv2.putText(img, "Fall Detected", (x1, y1 - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
 
                         # Text in top left corner
-                        cv2.putText(img, "Fall Detected", (20, 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+                        cv2.putText(img, "Fall Detected", (20, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
 
         return img, fallen
     
@@ -168,7 +168,7 @@ class FallDetector:
                     # cv2.putText(img, "Fall Detected", (x1, y1 - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 3)
                     
                     # Text in top right
-                    cv2.putText(img, "Fall Detected", (width - 100, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 3)
+                    cv2.putText(img, "Fall Detected", (width - 150, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 3)
 
 
         return img, fallen
