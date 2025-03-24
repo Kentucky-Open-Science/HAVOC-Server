@@ -274,14 +274,15 @@ def gen_frames():
                 bottom_img, bottom_fallen = fall_detector.bottom_frac_fall_detection(cv2.resize(img.copy(), (half_w, half_h)))
                 combined_img = fall_detector.combined_frame(cv2.resize(img.copy(), (half_w, half_h)))
                 
-                if recording and video_writer is not None:
-                    resized_frame = cv2.resize(combined_img, (640, 480))
-                    video_writer.write(resized_frame)
-
                 # Combine into 2x2 grid
                 top_row = np.hstack((box_img, pose_img))
                 bottom_row = np.hstack((bottom_img, combined_img))
                 grid_img = np.vstack((top_row, bottom_row))
+                
+                if recording and video_writer is not None:
+                    resized_frame = cv2.resize(grid_img, (640, 480))
+                    video_writer.write(resized_frame)
+
 
                 ret, buffer = cv2.imencode('.jpg', grid_img)
                 frame_bytes = buffer.tobytes()
