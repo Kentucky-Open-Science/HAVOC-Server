@@ -250,7 +250,7 @@ def gen_frames():
     while True:
         time.sleep(0.02)
         frame = frame_holder.get('frame', offline_bytes)
-        
+
         if isinstance(frame, bytes):
             frame_bytes = frame
             if last_pts is not None:
@@ -264,15 +264,22 @@ def gen_frames():
                 freeze_detected_time = None
                 duplicate_frame_count = 0
                 img = frame.to_ndarray(format="bgr24")
-                
-                # Define which process function to use
-                processed_img = fall_detector.test_process_frame_pose_fall(img)
-                
-                if recording and video_writer is not None:
-                    resized_frame = cv2.resize(processed_img, (640, 480))
-                    video_writer.write(resized_frame)
-                
-                ret, buffer = cv2.imencode('.jpg', processed_img)
+
+                height, width = img.shape[:2]
+                half_w, half_h = width // 2, height // 2
+
+                # Get processed images
+                box_img, box_fallen = fall_detector.test_process_frame_box(cv2.resize(img.copy(), (half_w, half_h)))
+                pose_img, pose_fallen = fall_detector.test_process_frame_pose_fall(cv2.resize(img.copy(), (half_w, half_h)))
+                bottom_img, bottom_fallen = fall_detector.bottom_frac_fall_detection(cv2.resize(img.copy(), (half_w, half_h)))
+                combined_img = fall_detector.combined_frame(cv2.resize(img.copy(), (half_w, half_h)))
+
+                # Combine into 2x2 grid
+                top_row = np.hstack((box_img, pose_img))
+                bottom_row = np.hstack((bottom_img, combined_img))
+                grid_img = np.vstack((top_row, bottom_row))
+
+                ret, buffer = cv2.imencode('.jpg', grid_img)
                 frame_bytes = buffer.tobytes()
             else:
                 if freeze_detected_time is None:
@@ -285,10 +292,10 @@ def gen_frames():
                     duplicate_frame_count += 1
                     if duplicate_frame_count == duplicate_threshold:
                         logger.warning(f"Duplicate frames detected, count={duplicate_frame_count}")
-                    # frame_bytes remains the last processed frame
 
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+
 
 # -------- Main Execution ----------
 if __name__ == "__main__":
