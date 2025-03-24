@@ -4,7 +4,7 @@ import logging
 from aiohttp import web
 from aiortc import MediaStreamTrack, RTCPeerConnection, RTCSessionDescription
 from aiortc.contrib.media import MediaRelay
-from flask import Flask, Response, render_template, jsonify
+from flask import Flask, Response, render_template, jsonify, request
 import threading
 import time
 from datetime import datetime
@@ -189,6 +189,25 @@ def get_status():
 @flask_app.route('/video_feed')
 def video_feed():
     return Response(gen_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+# Global variable to hold latest sensor data
+latest_sensor_data = {"data": None, "timestamp": None}
+
+@flask_app.route('/sensor-data', methods=['POST'])
+def sensor_data():
+    global latest_sensor_data
+    data = request.json.get('sensor_data')
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    
+    latest_sensor_data = {"data": data, "timestamp": timestamp}
+    print(f"[{timestamp}] Received sensor data: {data}")
+
+    return jsonify({"status": "Sensor data received"}), 200
+
+@flask_app.route('/get-latest-sensor-data', methods=['GET'])
+def get_latest_sensor_data():
+    return jsonify(latest_sensor_data), 200
+
 
 def gen_frames():
     global last_pts, freeze_detected_time, duplicate_frame_count, last_frame_time
