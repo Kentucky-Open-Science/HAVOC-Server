@@ -273,6 +273,10 @@ def gen_frames():
                 pose_img, pose_fallen = fall_detector.test_process_frame_pose_fall(cv2.resize(img.copy(), (half_w, half_h)))
                 bottom_img, bottom_fallen = fall_detector.bottom_frac_fall_detection(cv2.resize(img.copy(), (half_w, half_h)))
                 combined_img = fall_detector.combined_frame(cv2.resize(img.copy(), (half_w, half_h)))
+                
+                if recording and video_writer is not None:
+                    resized_frame = cv2.resize(combined_img, (640, 480))
+                    video_writer.write(resized_frame)
 
                 # Combine into 2x2 grid
                 top_row = np.hstack((box_img, pose_img))
