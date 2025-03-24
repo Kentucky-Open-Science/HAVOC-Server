@@ -4,7 +4,7 @@ import logging
 from aiohttp import web
 from aiortc import MediaStreamTrack, RTCPeerConnection, RTCSessionDescription
 from aiortc.contrib.media import MediaRelay
-from flask import Flask, Response, render_template, jsonify
+from flask import Flask, Response, render_template, jsonify, request
 import threading
 import time
 from datetime import datetime
@@ -190,8 +190,62 @@ def get_status():
 def video_feed():
     return Response(gen_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
+# Global variable to hold latest sensor data
+latest_sensor_data = {"data": None, "timestamp": None}
+
+@flask_app.route('/sensor-data', methods=['POST'])
+def sensor_data():
+    global latest_sensor_data
+    data = request.json.get('sensor_data')
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    
+    latest_sensor_data = {"data": data, "timestamp": timestamp}
+    print(f"[{timestamp}] Received sensor data: {data}")
+
+    return jsonify({"status": "Sensor data received"}), 200
+
+@flask_app.route('/get-latest-sensor-data', methods=['GET'])
+def get_latest_sensor_data():   
+    return jsonify(latest_sensor_data), 200
+
+# Additional imports for recording
+video_writer = None
+recording = False
+record_lock = threading.Lock()
+
+@flask_app.route('/start-recording', methods=['POST'])
+def start_recording():
+    global video_writer, recording
+    
+    with record_lock:
+        if recording:
+            return jsonify({'status': 'already recording'}), 200
+        
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"Temi_VODs/recorded_video_{timestamp}.mp4"
+        video_writer = cv2.VideoWriter(filename, fourcc, 20.0, (640, 480))
+        recording = True
+        
+    return jsonify({'status': 'recording started', 'filename': filename}), 200
+
+@flask_app.route('/stop-recording', methods=['POST'])
+def stop_recording():
+    global video_writer, recording
+
+    with record_lock:
+        if not recording:
+            return jsonify({'status': 'not recording'}), 200
+        
+        recording = False
+        video_writer.release()
+        video_writer = None
+
+    return jsonify({'status': 'recording stopped'}), 200
+
+
 def gen_frames():
-    global last_pts, freeze_detected_time, duplicate_frame_count, last_frame_time
+    global last_pts, freeze_detected_time, duplicate_frame_count, last_frame_time, video_writer, recording
 
     while True:
         time.sleep(0.02)
@@ -213,6 +267,10 @@ def gen_frames():
                 
                 # Define which process function to use
                 processed_img = fall_detector.test_process_frame_pose_fall(img)
+                
+                if recording and video_writer is not None:
+                    resized_frame = cv2.resize(processed_img, (640, 480))
+                    video_writer.write(resized_frame)
                 
                 ret, buffer = cv2.imencode('.jpg', processed_img)
                 frame_bytes = buffer.tobytes()
