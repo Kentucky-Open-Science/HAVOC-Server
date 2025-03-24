@@ -1,10 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <title>Stream Monitor</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
+
 <body class="bg-gray-100 flex flex-col items-center min-h-screen">
     <!-- ASCII Art Header -->
     <div class="ascii-art text-center mb-4 mt-4">
@@ -40,6 +42,17 @@
         </p>
     </div>
 
+    <div class="w-7/12 p-4 mt-4 bg-white rounded shadow text-center">
+        <button id="start-recording" class="bg-green-500 text-white px-4 py-2 rounded mr-2 hover:bg-green-600">
+            Start Recording
+        </button>
+        <button id="stop-recording" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">
+            Stop Recording
+        </button>
+        <p id="recording-status" class="mt-2 text-gray-700">Not recording.</p>
+    </div>
+
+
     <!-- JavaScript for Dynamic Updates -->
     <script>
         function updateStatus() {
@@ -66,9 +79,29 @@
         setInterval(updateStatus, 1000);
         updateStatus();
 
+
+        document.getElementById('start-recording').onclick = () => {
+            fetch('/start-recording', { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('recording-status').innerText = data.status;
+                })
+                .catch(e => console.error(e));
+        };
+
+        document.getElementById('stop-recording').onclick = () => {
+            fetch('/stop-recording', { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('recording-status').innerText = data.status;
+                })
+                .catch(e => console.error(e));
+        };
+
         // Update sensor data every second
         setInterval(updateSensorData, 1000);
         updateSensorData();
     </script>
 </body>
+
 </html>

@@ -5,6 +5,7 @@ from aiohttp import web
 from aiortc import MediaStreamTrack, RTCPeerConnection, RTCSessionDescription
 from aiortc.contrib.media import MediaRelay
 from flask import Flask, Response, render_template, jsonify, request
+from flask import Flask, Response, render_template, jsonify, request
 import threading
 import time
 from datetime import datetime
@@ -205,17 +206,52 @@ def sensor_data():
     return jsonify({"status": "Sensor data received"}), 200
 
 @flask_app.route('/get-latest-sensor-data', methods=['GET'])
-def get_latest_sensor_data():
+def get_latest_sensor_data():   
     return jsonify(latest_sensor_data), 200
+
+# Additional imports for recording
+video_writer = None
+recording = False
+record_lock = threading.Lock()
+
+@flask_app.route('/start-recording', methods=['POST'])
+def start_recording():
+    global video_writer, recording
+    
+    with record_lock:
+        if recording:
+            return jsonify({'status': 'already recording'}), 200
+        
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"Temi_VODs/recorded_video_{timestamp}.mp4"
+        video_writer = cv2.VideoWriter(filename, fourcc, 12.0, (640, 480)) # changed to 12 fps
+        recording = True
+        
+    return jsonify({'status': 'recording started', 'filename': filename}), 200
+
+@flask_app.route('/stop-recording', methods=['POST'])
+def stop_recording():
+    global video_writer, recording
+
+    with record_lock:
+        if not recording:
+            return jsonify({'status': 'not recording'}), 200
+        
+        recording = False
+        video_writer.release()
+        video_writer = None
+
+    return jsonify({'status': 'recording stopped'}), 200
 
 
 def gen_frames():
-    global last_pts, freeze_detected_time, duplicate_frame_count, last_frame_time
+    global last_pts, freeze_detected_time, duplicate_frame_count, last_frame_time, video_writer, recording
 
     while True:
         time.sleep(0.02)
         frame = frame_holder.get('frame', offline_bytes)
-        
+
         if isinstance(frame, bytes):
             frame_bytes = frame
             if last_pts is not None:
@@ -229,11 +265,27 @@ def gen_frames():
                 freeze_detected_time = None
                 duplicate_frame_count = 0
                 img = frame.to_ndarray(format="bgr24")
+
+                height, width = img.shape[:2]
+                half_w, half_h = width // 2, height // 2
+
+                # Get processed images
+                box_img, box_fallen = fall_detector.test_process_frame_box(cv2.resize(img.copy(), (half_w, half_h)))
+                pose_img, pose_fallen = fall_detector.test_process_frame_pose_fall(cv2.resize(img.copy(), (half_w, half_h)))
+                bottom_img, bottom_fallen = fall_detector.bottom_frac_fall_detection(cv2.resize(img.copy(), (half_w, half_h)))
+                combined_img = fall_detector.combined_frame(cv2.resize(img.copy(), (half_w, half_h)))
                 
-                # Define which process function to use
-                processed_img = fall_detector.test_process_frame_pose_fall(img)
+                # Combine into 2x2 grid
+                top_row = np.hstack((box_img, pose_img))
+                bottom_row = np.hstack((bottom_img, combined_img))
+                grid_img = np.vstack((top_row, bottom_row))
                 
-                ret, buffer = cv2.imencode('.jpg', processed_img)
+                if recording and video_writer is not None:
+                    resized_frame = cv2.resize(grid_img, (640, 480))
+                    video_writer.write(resized_frame)
+
+
+                ret, buffer = cv2.imencode('.jpg', grid_img)
                 frame_bytes = buffer.tobytes()
             else:
                 if freeze_detected_time is None:
@@ -246,10 +298,10 @@ def gen_frames():
                     duplicate_frame_count += 1
                     if duplicate_frame_count == duplicate_threshold:
                         logger.warning(f"Duplicate frames detected, count={duplicate_frame_count}")
-                    # frame_bytes remains the last processed frame
 
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+
 
 # -------- Main Execution ----------
 if __name__ == "__main__":
