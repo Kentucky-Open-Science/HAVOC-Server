@@ -224,7 +224,7 @@ def start_recording():
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         filename = f"Temi_VODs/recorded_video_{timestamp}.mp4"
-        video_writer = cv2.VideoWriter(filename, fourcc, 10.0, (640, 480)) # changed to 15 fps
+        video_writer = cv2.VideoWriter(filename, fourcc, 13.0, (640, 480)) # changed to 13 fps
         recording = True
         
     return jsonify({'status': 'recording started', 'filename': filename}), 200
