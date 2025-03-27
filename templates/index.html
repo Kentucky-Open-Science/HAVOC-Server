@@ -31,6 +31,17 @@
         </div>
     </div>
 
+    <!-- Sensor Data Container (New Component) -->
+    <div class="w-7/12 p-4 mt-4 bg-blue-100 rounded shadow text-center">
+        <h2 class="text-xl font-semibold">Sensor Data</h2>
+        <p class="mt-2 text-gray-800">
+            Data: <span id="sensor_data">No data received yet.</span>
+        </p>
+        <p class="text-sm text-gray-600">
+            Timestamp: <span id="sensor_timestamp">-</span>
+        </p>
+    </div>
+
     <div class="w-7/12 p-4 mt-4 bg-white rounded shadow text-center">
         <button id="start-recording" class="bg-green-500 text-white px-4 py-2 rounded mr-2 hover:bg-green-600">
             Start Recording
@@ -53,8 +64,19 @@
                 })
                 .catch(error => console.error('Error fetching status:', error));
         }
-        setInterval(updateStatus, 1000); // Update every second
-        // Initial call to populate status immediately
+
+        function updateSensorData() {
+            fetch('/get-latest-sensor-data')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('sensor_data').innerText = data.data || "No data yet.";
+                    document.getElementById('sensor_timestamp').innerText = data.timestamp || "-";
+                })
+                .catch(error => console.error('Error fetching sensor data:', error));
+        }
+
+        // Update status every second
+        setInterval(updateStatus, 1000);
         updateStatus();
 
 
@@ -75,6 +97,10 @@
                 })
                 .catch(e => console.error(e));
         };
+
+        // Update sensor data every second
+        setInterval(updateSensorData, 1000);
+        updateSensorData();
     </script>
 </body>
 

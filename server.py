@@ -5,11 +5,13 @@ from aiohttp import web
 from aiortc import MediaStreamTrack, RTCPeerConnection, RTCSessionDescription
 from aiortc.contrib.media import MediaRelay
 from flask import Flask, Response, render_template, jsonify, request
+from flask import Flask, Response, render_template, jsonify, request
 import threading
 import time
 from datetime import datetime
 import numpy as np
 import os
+import json
 from aiortc.sdp import candidate_from_sdp, candidate_to_sdp, SessionDescription as SDPDescription
 
 from yolo_fall_detection import FallDetector  # Import the FallDetector class
@@ -93,10 +95,30 @@ async def create_peer_connection():
                 except Exception as e:
                     logger.error(f"Error consuming video track: {e}")
 
+            video_track = VideoProcessorTrack(relay.subscribe(track))
+            peer.addTrack(video_track)
             asyncio.create_task(consume_track())
 
+    @peer.on("datachannel")
+    def on_datachannel(channel):
+        logger.info(f"📡 DataChannel received: {channel.label}")
+
+        @channel.on("message")
+        def on_message(message):
+            try:
+                # Assume JSON string with 'sensor_data'
+                data = json.loads(message)
+                sensor_data = data.get('values')
+                timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                latest_sensor_data['data'] = sensor_data
+                latest_sensor_data['timestamp'] = timestamp
+
+                logger.info(f"[{timestamp}] DataChannel sensor data: {sensor_data}")
+            except Exception as e:
+                logger.error(f"Failed to process DataChannel message: {e}")
+
     pcs.add(peer)
-    return peer  # <-- MAKE SURE THIS RETURN STATEMENT EXISTS!
+    return peer
 
 async def offer(request):
     params = await request.json()
