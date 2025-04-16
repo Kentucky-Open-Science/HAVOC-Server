@@ -31,7 +31,7 @@ class FallDetector:
 
     def test_process_frame_box(self, img):
         """Processes a single frame, detects people, and labels falls."""
-        results = self.model(img, stream=True, conf=self.conf_threshold)
+        results = self.model(img, stream=True, conf=self.conf_threshold, verbose=False)
         fallen = False
         height, width, _ = img.shape
 
@@ -74,7 +74,7 @@ class FallDetector:
         :param img: The input frame (numpy array).
         :return: Frame with keypoints plotted.
         """
-        results = self.model(img, stream=True, conf=self.conf_threshold)
+        results = self.model(img, stream=True, conf=self.conf_threshold, verbose=False)
 
         # Iterate over the detection results
         for result in results:
@@ -99,7 +99,7 @@ class FallDetector:
         return img
     
     def test_process_frame_pose_fall(self, img):
-        results = self.model(img, stream=True, conf=self.conf_threshold)
+        results = self.model(img, stream=True, conf=self.conf_threshold, verbose=False)
         fallen = False
         height, width, _ = img.shape
 
@@ -184,7 +184,7 @@ class FallDetector:
 
         cv2.line(img, (0, line_height), (width, line_height), self.UKBlue, 2)
 
-        results = self.model(img, conf=self.conf_threshold)
+        results = self.model(img, conf=self.conf_threshold, verbose=False)
         fallen = False
 
         for r in results:

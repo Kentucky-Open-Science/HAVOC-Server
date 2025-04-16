@@ -13,6 +13,14 @@ import numpy as np
 import os
 import json
 from aiortc.sdp import candidate_from_sdp, candidate_to_sdp, SessionDescription as SDPDescription
+from daily_reports import (
+    send_email_report,
+    schedule_daily_report,
+    increment,
+    add_time,
+    update_csv_metrics,
+)
+
 
 from yolo_fall_detection import FallDetector  # Import the FallDetector class
 
@@ -130,6 +138,10 @@ async def create_peer_connection():
                 logger.error(f"Failed to process DataChannel message: {e}")
 
     pcs.add(peer)
+    
+    #REPORT
+    increment("webrtc_connections")
+
     return peer
 
 async def offer(request):
@@ -176,10 +188,15 @@ async def offer(request):
     answer = await peer.createAnswer()
     await peer.setLocalDescription(answer)
 
+    #REPORT
+    increment("http_api_calls")
+
     return web.json_response({
         "sdp": peer.localDescription.sdp,
         "type": peer.localDescription.type
     })
+        
+
 
 
 
@@ -218,10 +235,17 @@ def get_status():
             stream_status = "Frozen"
         else:
             stream_status = "Live"
+    
+    #REPORT            
+    increment("http_api_calls")
+
     return jsonify({'stream_status': stream_status, 'last_frame_time': last_frame_time})
 
 @flask_app.route('/video_feed')
 def video_feed():
+    #REPORT            
+    increment("http_api_calls")
+
     return Response(gen_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 # Global variable to hold latest sensor data
@@ -244,11 +268,17 @@ def sensor_data():
     # # Record to CSV if flag is True
     # if should_record:                                 <------ Rest API version to record data from another source
     #     record_sensor_data_to_csv(data, timestamp)
-        
+    
+    #REPORT            
+    increment("http_api_calls")
+    
     return jsonify({"status": "Sensor data received"}), 200
 
 @flask_app.route('/get-latest-sensor-data', methods=['GET'])
 def get_latest_sensor_data():   
+    #REPORT            
+    increment("http_api_calls")
+
     return jsonify(latest_sensor_data), 200
 
 # Additional imports for recording
@@ -270,6 +300,9 @@ def start_recording():
         video_writer = cv2.VideoWriter(filename, fourcc, 12.0, (640, 480)) # changed to 12 fps
         recording = True
         
+    #REPORT            
+    increment("http_api_calls")
+
     return jsonify({'status': 'recording started', 'filename': filename}), 200
 
 @flask_app.route('/stop-recording', methods=['POST'])
@@ -283,8 +316,22 @@ def stop_recording():
         recording = False
         video_writer.release()
         video_writer = None
+        
+    #REPORT            
+    increment("http_api_calls")
 
     return jsonify({'status': 'recording stopped'}), 200
+
+
+# === MANUAL TRIGGER ROUTE ===
+@flask_app.route("/send-report-now", methods=["GET"])
+def trigger_report():
+    success = send_email_report()
+    
+    #REPORT            
+    increment("http_api_calls")
+
+    return jsonify({"status": "sent" if success else "failed"})
 
 
 def gen_frames():
@@ -325,6 +372,10 @@ def gen_frames():
                 if recording and video_writer is not None:
                     resized_frame = cv2.resize(grid_img, (640, 480))
                     video_writer.write(resized_frame)
+                    
+                    #REPORT
+                    increment("frames_processed")
+
 
 
                 ret, buffer = cv2.imencode('.jpg', grid_img)
@@ -376,6 +427,10 @@ def record_sensor_data_to_csv(sensor_data, timestamp):
             row_data = sensor_data.copy()
             row_data['timestamp'] = timestamp
             writer.writerow(row_data)
+            
+            #REPORT
+            increment("record_triggers_today")
+            update_csv_metrics()        
 
         elif isinstance(sensor_data, list):
             writer = csv.writer(csvfile)
@@ -386,6 +441,10 @@ def record_sensor_data_to_csv(sensor_data, timestamp):
 
             # Write data row with timestamp
             writer.writerow([timestamp] + sensor_data)
+            
+            #REPORT
+            increment("record_triggers_today")
+            update_csv_metrics()   
 
         else:
             writer = csv.writer(csvfile)
@@ -396,6 +455,10 @@ def record_sensor_data_to_csv(sensor_data, timestamp):
 
             # Write data row with timestamp
             writer.writerow([timestamp, sensor_data])
+            
+            #REPORT
+            increment("record_triggers_today")
+            update_csv_metrics()   
 
 
 # -------- Main Execution ----------
@@ -414,5 +477,10 @@ if __name__ == "__main__":
         logger.info("🚀 aiohttp signaling server started on http://0.0.0.0:5432")
         while True:
             await asyncio.sleep(3600)
+            
+            
+    from daily_reports import schedule_daily_report
+    schedule_daily_report()
+
 
     asyncio.run(aiohttp_main())
