@@ -118,9 +118,9 @@ async def create_peer_connection():
                 # Assume JSON string with 'sensor_data' and 'should_record' flag
                 data = json.loads(message)
                 sensor_data = data.get('values')
-                # should_record = data.get('should_record', False)  # Default to False if not provided
+                should_record = data.get('should_record', False)  # Default to False if not provided
                 
-                should_record = True  # Force recording for testing
+                # should_record = True  # Force recording for testing
                 timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 
                 latest_sensor_data['data'] = sensor_data
