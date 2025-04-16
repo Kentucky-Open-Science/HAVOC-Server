@@ -5,7 +5,6 @@ from aiohttp import web
 from aiortc import MediaStreamTrack, RTCPeerConnection, RTCSessionDescription
 from aiortc.contrib.media import MediaRelay
 from flask import Flask, Response, render_template, jsonify, request
-from flask import Flask, Response, render_template, jsonify, request
 import threading
 import time
 from datetime import datetime

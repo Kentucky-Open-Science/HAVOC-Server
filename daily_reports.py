@@ -185,9 +185,3 @@ def run_and_reschedule():
     send_email_report()
     reset_daily_metrics()
     schedule_daily_report()
-
-# === MANUAL TRIGGER ROUTE ===
-@report_app.route("/send-report-now", methods=["GET"])
-def trigger_report():
-    success = send_email_report()
-    return jsonify({"status": "sent" if success else "failed"})
