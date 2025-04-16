@@ -33,6 +33,8 @@ duplicate_threshold = 5
 freeze_threshold = 5.0
 last_frame_time = "N/A"
 
+
+
 # Load offline placeholder image
 filler_image_path = os.path.join('static', 'temiFace_screen_saver.png')
 if not os.path.exists(filler_image_path):
@@ -106,14 +108,24 @@ async def create_peer_connection():
         @channel.on("message")
         def on_message(message):
             try:
-                # Assume JSON string with 'sensor_data'
+                # Assume JSON string with 'sensor_data' and 'should_record' flag
                 data = json.loads(message)
                 sensor_data = data.get('values')
+                # should_record = data.get('should_record', False)  # Default to False if not provided
+                
+                should_record = True  # Force recording for testing
                 timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                
                 latest_sensor_data['data'] = sensor_data
                 latest_sensor_data['timestamp'] = timestamp
+                latest_sensor_data['should_record'] = should_record
 
-                logger.info(f"[{timestamp}] DataChannel sensor data: {sensor_data}")
+                logger.info(f"[{timestamp}] DataChannel sensor data: {sensor_data}, Record flag: {should_record}")
+                
+                # Record to CSV if flag is True
+                if should_record:
+                    record_sensor_data_to_csv(sensor_data, timestamp)
+                
             except Exception as e:
                 logger.error(f"Failed to process DataChannel message: {e}")
 
@@ -219,11 +231,20 @@ latest_sensor_data = {"data": None, "timestamp": None}
 def sensor_data():
     global latest_sensor_data
     data = request.json.get('sensor_data')
+    should_record = request.json.get('should_record', False)
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     
-    latest_sensor_data = {"data": data, "timestamp": timestamp}
-    print(f"[{timestamp}] Received sensor data: {data}")
-
+    latest_sensor_data = {
+        "data": data, 
+        "timestamp": timestamp,
+        "should_record": should_record
+    }
+    print(f"[{timestamp}] Received sensor data: {data}, Record flag: {should_record}")
+    
+    # # Record to CSV if flag is True
+    # if should_record:                                 <------ Rest API version to record data from another source
+    #     record_sensor_data_to_csv(data, timestamp)
+        
     return jsonify({"status": "Sensor data received"}), 200
 
 @flask_app.route('/get-latest-sensor-data', methods=['GET'])
@@ -322,6 +343,59 @@ def gen_frames():
 
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+
+import csv
+import os
+from datetime import datetime
+
+def record_sensor_data_to_csv(sensor_data, timestamp):
+    """Record sensor data to a master CSV file for long-term accumulation"""
+    if not sensor_data:
+        return
+
+    # Create directory if it doesn't exist
+    csv_dir = "Temi_Sensor_Data"
+    os.makedirs(csv_dir, exist_ok=True)
+
+    # Master file path
+    csv_path = os.path.join(csv_dir, "sensor_data_master.csv")
+
+    # Check if file exists to determine if we need to write headers
+    file_exists = os.path.isfile(csv_path)
+
+    with open(csv_path, 'a', newline='') as csvfile:
+        if isinstance(sensor_data, dict):
+            fieldnames = ['timestamp'] + list(sensor_data.keys())
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+
+            # Write header if file is new
+            if not file_exists:
+                writer.writeheader()
+
+            # Write data row with timestamp
+            row_data = sensor_data.copy()
+            row_data['timestamp'] = timestamp
+            writer.writerow(row_data)
+
+        elif isinstance(sensor_data, list):
+            writer = csv.writer(csvfile)
+
+            # Write header if file is new
+            if not file_exists:
+                writer.writerow(['timestamp'] + [f'value_{i}' for i in range(len(sensor_data))])
+
+            # Write data row with timestamp
+            writer.writerow([timestamp] + sensor_data)
+
+        else:
+            writer = csv.writer(csvfile)
+
+            # Write header if file is new
+            if not file_exists:
+                writer.writerow(['timestamp', 'value'])
+
+            # Write data row with timestamp
+            writer.writerow([timestamp, sensor_data])
 
 
 # -------- Main Execution ----------
