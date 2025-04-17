@@ -8,10 +8,10 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
-<body class="bg-gray-100 min-h-screen">
+<body class="bg-gray-100 min-h-screen text-[1.25rem] md:text-[1.5rem] leading-relaxed">
     <!-- ASCII Art Header -->
-    <div class="ascii-art text-center py-4">
-        <pre class="text-xl font-mono text-gray-700 overflow-auto">
+    <div class="ascii-art text-center py-6">
+        <pre class="text-2xl md:text-3xl font-mono text-gray-700 overflow-auto">
 ╔══════════════════════════════════════════════════════════════════════════════════╗
 ║  ████████╗███████╗███╗   ███╗██╗    ██████╗  ██████╗ ██████╗  ██████╗ ████████╗  ║
 ║  ╚══██╔══╝██╔════╝████╗ ████║██║    ██╔══██╗██╔═══██╗██╔══██╗██╔═══██╗╚══██╔══╝  ║
@@ -24,22 +24,22 @@
     </div>
 
     <!-- Main Flex Container -->
-    <div class="flex flex-col md:flex-row gap-4 px-4 pb-8 max-w-7xl mx-auto">
+    <div class="flex flex-col md:flex-row gap-6 px-6 pb-12 max-w-7xl mx-auto">
         <!-- Left: Video Feed -->
-        <div class="flex-[2] bg-white rounded shadow p-4">
+        <div class="flex-[2] bg-white rounded shadow p-6">
             <img src="{{ url_for('video_feed') }}" alt="Video Stream" class="w-full h-auto rounded">
-            <div class="mt-2 text-center">
-                <p class="text-lg">Stream: <span id="stream_status">{{ stream_status }}</span></p>
-                <p class="text-sm text-gray-600">Last Frame: <span id="last_frame_time">{{ last_frame_time }}</span></p>
+            <div class="mt-4 text-center">
+                <p class="text-xl">Stream: <span id="stream_status">{{ stream_status }}</span></p>
+                <p class="text-lg text-gray-600">Last Frame: <span id="last_frame_time">{{ last_frame_time }}</span></p>
             </div>
         </div>
 
         <!-- Right: Metrics on top, Chart below -->
-        <div class="flex-[1] flex flex-col gap-4">
+        <div class="flex-[1] flex flex-col gap-6">
             <!-- Metrics -->
-            <div class="bg-green-100 rounded shadow p-4">
-                <h2 class="text-xl font-semibold mb-2 text-center">📈 Real-Time Metrics</h2>
-                <div id="metrics-display" class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm text-gray-800">
+            <div class="bg-green-100 rounded shadow p-6">
+                <h2 class="text-2xl font-semibold mb-4 text-center">📈 Real-Time Metrics</h2>
+                <div id="metrics-display" class="grid grid-cols-2 gap-x-6 gap-y-3 text-lg text-gray-800">
                     <p><strong>People Detected Today:</strong> <span id="people_detected_today">-</span></p>
                     <p><strong>Falls (Box):</strong> <span id="falls_box">-</span></p>
                     <p><strong>Falls (Pose):</strong> <span id="falls_pose">-</span></p>
@@ -48,13 +48,12 @@
                     <p><strong>Frames Processed:</strong> <span id="frames_processed">-</span></p>
                 </div>
             </div>
-            
 
             <!-- Sensor Chart -->
-            <div class="bg-blue-100 rounded shadow p-4 h-full">
-                <h2 class="text-xl font-semibold text-center">Sensor Data</h2>
-                <p class="text-sm text-gray-600 text-center mb-2">Timestamp: <span id="sensor_timestamp">-</span></p>
-                <div class="h-[250px] md:h-[300px] overflow-x-auto">
+            <div class="bg-blue-100 rounded shadow p-6 h-full">
+                <h2 class="text-2xl font-semibold text-center">Sensor Data</h2>
+                <p class="text-lg text-gray-600 text-center mb-4">Timestamp: <span id="sensor_timestamp">-</span></p>
+                <div class="h-[300px] md:h-[350px] overflow-x-auto">
                     <canvas id="sensorChart"></canvas>
                 </div>
             </div>
@@ -62,18 +61,19 @@
     </div>
 
     <!-- Recording Buttons -->
-    <div class="w-full flex justify-center mb-8">
-        <div class="bg-white p-4 rounded shadow text-center">
-            <button id="start-recording" class="bg-green-500 text-white px-4 py-2 rounded mr-2 hover:bg-green-600">
+    <div class="w-full flex justify-center mb-12">
+        <div class="bg-white p-6 rounded shadow text-center">
+            <button id="start-recording" class="bg-green-500 text-white text-xl px-6 py-3 rounded mr-4 hover:bg-green-600">
                 Start Recording
             </button>
-            <button id="stop-recording" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">
+            <button id="stop-recording" class="bg-red-500 text-white text-xl px-6 py-3 rounded hover:bg-red-600">
                 Stop Recording
             </button>
-            <p id="recording-status" class="mt-2 text-gray-700">Not recording.</p>
+            <p id="recording-status" class="mt-4 text-lg text-gray-700">Not recording.</p>
         </div>
     </div>
 </body>
+
 
 
     <!-- JavaScript -->
