@@ -106,24 +106,40 @@
             };
 
             const config = {
-                type: 'bar',
-                data: data,
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        x: {
-                            ticks: {
-                                maxRotation: 90,
-                                minRotation: 45
-                            }
-                        },
-                        y: {
-                            beginAtZero: true
-                        }
-                    }
+    type: 'bar',
+    data: data,
+    options: {
+        indexAxis: 'y', // 🔁 Makes bars horizontal
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+            x: {
+                beginAtZero: true
+            },
+            y: {
+                ticks: {
+                    maxRotation: 0,
+                    minRotation: 0
                 }
-            };
+            }
+        },
+        plugins: {
+            legend: {
+                display: false // Optional: hide legend
+            }
+        },
+        elements: {
+            bar: {
+                borderWidth: 1,
+                borderSkipped: false,
+                barThickness: 16,     // 👈 Specific bar height (like bar width in vertical chart)
+                categoryPercentage: 0.8, // 👈 Controls spacing between categories (default 0.8)
+                barPercentage: 0.9       // 👈 Controls spacing within categories (default 0.9)
+            }
+        }
+    }
+};
+
 
             if (sensorChart) {
                 sensorChart.options.animation = false; // Disable animation on update
