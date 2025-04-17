@@ -11,6 +11,7 @@ from datetime import datetime
 import numpy as np
 import os
 import json
+import time
 from aiortc.sdp import candidate_from_sdp, candidate_to_sdp, SessionDescription as SDPDescription
 from daily_reports import (
     send_email_report,
@@ -334,6 +335,9 @@ def gen_frames():
     last_state_change_time = time.time()
     
     last_person_count = 0
+    last_person_increment_time = 0
+    fall_cooldown = 1.0  # seconds
+    person_cooldown = 1.0  # seconds
 
     prev_falls = {
     "box": False,
@@ -341,7 +345,14 @@ def gen_frames():
     "bottom": False,
     "full": False
     }
-
+    
+    last_fall_times = {
+    "box": 0,
+    "pose": 0,
+    "bottom": 0,
+    "full": 0
+    }
+    
     while True:
         time.sleep(0.02)
         frame = frame_holder.get('frame', offline_bytes)
@@ -407,19 +418,32 @@ def gen_frames():
                 combined_img, combined_fallen = fall_detector.combined_frame(cv2.resize(img.copy(), (half_w, half_h)))
                 
                 #REPORT: increment person detected count 
-                if person_count > last_person_count:
+                now = time.time()
+
+                # REPORT: increment person detected count with cooldown buffer
+                if person_count > last_person_count and now - last_person_increment_time > person_cooldown:
                     increment("people_detected_today")
+                    last_person_increment_time = now
+
                 last_person_count = person_count
 
-                # REPORT: Increment fall detection metrics only on transition
-                if box_fallen and not prev_falls["box"]:
+                # REPORT: Increment fall detection metrics only on new fall with cooldown buffer
+                if box_fallen and not prev_falls["box"] and now - last_fall_times["box"] > fall_cooldown:
                     increment("falls_box")
-                if pose_fallen and not prev_falls["pose"]:
+                    last_fall_times["box"] = now
+
+                if pose_fallen and not prev_falls["pose"] and now - last_fall_times["pose"] > fall_cooldown:
                     increment("falls_pose")
-                if bottom_fallen and not prev_falls["bottom"]:
+                    last_fall_times["pose"] = now
+
+                if bottom_fallen and not prev_falls["bottom"] and now - last_fall_times["bottom"] > fall_cooldown:
                     increment("falls_bottom")
-                if combined_fallen and not prev_falls["full"]:
+                    last_fall_times["bottom"] = now
+
+                if combined_fallen and not prev_falls["full"] and now - last_fall_times["full"] > fall_cooldown:
                     increment("falls_full")
+                    last_fall_times["full"] = now
+
 
                 # Update state tracking
                 prev_falls["box"] = box_fallen
