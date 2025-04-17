@@ -1,6 +1,8 @@
 import cv2
 import math
 from ultralytics import YOLO
+from fall_tracking import FallTracker
+
 
 class FallDetector:
     """A class for detecting people and identifying potential falls using YOLO."""
@@ -27,47 +29,39 @@ class FallDetector:
             "Left Wrist", "Right Wrist", "Left Hip", "Right Hip",
             "Left Knee", "Right Knee", "Left Ankle", "Right Ankle"
         ]
+        self.fall_tracker = FallTracker(cooldown=1.0, persistence=1.0)
+
 
     def test_process_frame_box(self, img):
-        """Processes a single frame, detects people, and labels falls."""
         results = self.model(img, stream=True, conf=self.conf_threshold, verbose=False)
-        fallen = False
+        centroids_fallen = []
         height, width, _ = img.shape
         person_count = 0
 
-
-
         for r in results:
-            boxes = r.boxes
-
-            for box in boxes:
-                if int(box.cls[0]) == 0:  # Only detect "person"
+            for box in r.boxes:
+                if int(box.cls[0]) == 0:
+                    x1, y1, x2, y2 = map(int, box.xyxy[0])
+                    cx = (x1 + x2) // 2
+                    cy = (y1 + y2) // 2
                     person_count += 1
 
-                    x1, y1, x2, y2 = map(int, box.xyxy[0])
                     confidence = math.ceil((box.conf[0] * 100)) / 100
-
-                    # Draw bounding box
                     cv2.rectangle(img, (x1, y1), (x2, y2), self.UKBlue, 3)
+                    cv2.putText(img, f"Person {confidence:.2f}", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.Bluegrass, 2)
 
-                    # Display label and confidence
-                    label = f"{self.classNames[0]} {confidence:.2f}"
-                    cv2.putText(img, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.Bluegrass, 2)
-
-                    height = y2 - y1
-                    width = x2 - x1
-
-                    # Check if fall is detected
-                    if height - width < 0:
-                        fallen = True
-                        
-                        # # Text ontop of box
-                        # cv2.putText(img, "Fall Detected", (x1, y1 - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.UKBlue, 2)
-
-                        # Text in top left corner
+                    # Determine if this box is a fall
+                    w, h = x2 - x1, y2 - y1
+                    is_fallen = h < w  # horizontal aspect → fallen
+                    if is_fallen:
                         cv2.putText(img, "Fall Detected", (20, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.UKBlue, 2)
 
-        return img, fallen, person_count
+                    centroids_fallen.append((cx, cy, is_fallen))
+
+        # === Update tracker
+        triggered_ids = self.fall_tracker.update(centroids_fallen)
+
+        return img, len(triggered_ids) > 0, person_count, self.fall_tracker.get_unique_faller_count()
     
     def test_process_frame_pose(self, img):
         """
@@ -214,7 +208,7 @@ class FallDetector:
         fallen = False
 
         height, width, _ = img.shape
-        box_img, box_fallen, _ = self.test_process_frame_box(img.copy())
+        box_img, box_fallen, _, _ = self.test_process_frame_box(img.copy())
         pose_img, pose_fallen = self.test_process_frame_pose_fall(img.copy())
         bottom_img, bottom_fallen = self.bottom_frac_fall_detection(img.copy())
 
