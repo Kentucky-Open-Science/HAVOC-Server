@@ -8,10 +8,12 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
-<body class="bg-gray-100 flex flex-col items-center min-h-screen">
+
+
+<body class="bg-gray-100 min-h-screen text-[1.25rem] md:text-[1.5rem] leading-relaxed">
     <!-- ASCII Art Header -->
-    <div class="ascii-art text-center mb-4 mt-4">
-        <pre class="text-xl font-mono text-gray-700">
+    <div class="ascii-art text-center py-6">
+        <pre class="text-2xl md:text-3xl font-mono text-gray-700 overflow-auto">
 ╔══════════════════════════════════════════════════════════════════════════════════╗
 ║  ████████╗███████╗███╗   ███╗██╗    ██████╗  ██████╗ ██████╗  ██████╗ ████████╗  ║
 ║  ╚══██╔══╝██╔════╝████╗ ████║██║    ██╔══██╗██╔═══██╗██╔══██╗██╔═══██╗╚══██╔══╝  ║
@@ -23,161 +25,192 @@
         </pre>
     </div>
 
-    <!-- Stream and Status Container -->
-    <div class="w-7/12 p-4 bg-white rounded shadow">
-        <img src="{{ url_for('video_feed') }}" alt="Video Stream" class="w-full h-auto" width="640" height="480">
-        <div class="mt-2 text-center">
-            <p class="text-lg">Stream: <span id="stream_status">{{ stream_status }}</span></p>
-            <p class="text-sm text-gray-600">Last Frame: <span id="last_frame_time">{{ last_frame_time }}</span></p>
+    <!-- Main Flex Container -->
+    <div class="flex flex-col md:flex-row gap-6 px-6 pb-12 w-[75%] mx-auto">
+        <!-- Left: Video Feed -->
+        <div class="flex-[2] bg-white rounded shadow p-6">
+            <img src="{{ url_for('video_feed') }}" alt="Video Stream" class="w-full h-auto rounded">
+            <div class="mt-4 text-center">
+                <p class="text-xl">Stream: <span id="stream_status">{{ stream_status }}</span></p>
+                <p class="text-lg text-gray-600">Last Frame: <span id="last_frame_time">{{ last_frame_time }}</span></p>
+            </div>
         </div>
-    </div>
 
-    <!-- Metrics Summary -->
-    <div class="w-7/12 p-4 mt-4 bg-green-100 rounded shadow text-center">
-        <h2 class="text-xl font-semibold mb-2">📈 Real-Time Metrics</h2>
-        <div id="metrics-display" class="text-sm text-gray-800 space-y-1">
-            <p><strong>People Detected Today:</strong> <span id="people_detected_today">-</span></p>
-            <p><strong>Falls (Box):</strong> <span id="falls_box">-</span></p>
-            <p><strong>Falls (Pose):</strong> <span id="falls_pose">-</span></p>
-            <p><strong>Falls (Bottom):</strong> <span id="falls_bottom">-</span></p>
-            <p><strong>Falls (Full):</strong> <span id="falls_full">-</span></p>
-            <p><strong>Frames Processed:</strong> <span id="frames_processed">-</span></p>
-        </div>
-    </div>
+        <!-- Right: Metrics on top, Chart below -->
+        <div class="flex-[1] flex flex-col gap-6">
+            <!-- Metrics -->
+            <div class="bg-green-100 rounded shadow p-6">
+                <h2 class="text-2xl font-semibold mb-4 text-center">📈 Real-Time Metrics</h2>
+                <div id="metrics-display" class="grid grid-cols-2 gap-x-6 gap-y-3 text-lg text-gray-800">
+                    <p><strong>People Detected Today:</strong> <span id="people_detected_today">-</span></p>
+                    <p><strong>Falls (Box):</strong> <span id="falls_box">-</span></p>
+                    <p><strong>Falls (Pose):</strong> <span id="falls_pose">-</span></p>
+                    <p><strong>Falls (Bottom):</strong> <span id="falls_bottom">-</span></p>
+                    <p><strong>Falls (Full):</strong> <span id="falls_full">-</span></p>
+                    <p><strong>Frames Processed:</strong> <span id="frames_processed">-</span></p>
+                </div>
+            </div>
 
-    <!-- Sensor Data Container -->
-    <div class="w-7/12 p-4 mt-4 bg-blue-100 rounded shadow text-center">
-        <h2 class="text-xl font-semibold">Sensor Data</h2>
-        <p class="text-sm text-gray-600">Timestamp: <span id="sensor_timestamp">-</span></p>
-        <div class="h-[300px] w-full overflow-x-auto">
-            <canvas id="sensorChart"></canvas>
+            <!-- Sensor Chart -->
+            <div class="bg-blue-100 rounded shadow p-6 h-full flex flex-col">
+                <h2 class="text-2xl font-semibold text-center">Sensor Data</h2>
+                <p class="text-lg text-gray-600 text-center mb-4">Timestamp: <span id="sensor_timestamp">-</span></p>
+                <div class="flex-grow overflow-hidden">
+                    <canvas id="sensorChart" class="w-full h-full"></canvas>
+                </div>
+            </div>
+
         </div>
     </div>
 
     <!-- Recording Buttons -->
-    <div class="w-7/12 p-4 mt-4 bg-white rounded shadow text-center">
-        <button id="start-recording" class="bg-green-500 text-white px-4 py-2 rounded mr-2 hover:bg-green-600">
-            Start Recording
-        </button>
-        <button id="stop-recording" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">
-            Stop Recording
-        </button>
-        <p id="recording-status" class="mt-2 text-gray-700">Not recording.</p>
+    <div class="w-full flex justify-center mb-12">
+        <div class="bg-white p-6 rounded shadow text-center">
+            <button id="start-recording"
+                class="bg-green-500 text-white text-xl px-6 py-3 rounded mr-4 hover:bg-green-600">
+                Start Recording
+            </button>
+            <button id="stop-recording" class="bg-red-500 text-white text-xl px-6 py-3 rounded hover:bg-red-600">
+                Stop Recording
+            </button>
+            <p id="recording-status" class="mt-4 text-lg text-gray-700">Not recording.</p>
+        </div>
     </div>
+</body>
 
-    <!-- JavaScript -->
-    <script>
-        let sensorChart;
 
-        function updateStatus() {
-            fetch('/status')
-                .then(response => response.json())
-                .then(data => {
-                    document.getElementById('stream_status').innerText = data.stream_status;
-                    document.getElementById('last_frame_time').innerText = data.last_frame_time;
-                })
-                .catch(error => console.error('Error fetching status:', error));
-        }
 
-        function createOrUpdateChart(values) {
-            const ctx = document.getElementById('sensorChart').getContext('2d');
-            const labels = values.map((_, i) => `#${i + 1}`);
+<!-- JavaScript -->
+<script>
+    let sensorChart;
 
-            const data = {
-                labels: labels,
-                datasets: [{
-                    label: 'Sensor Values',
-                    data: values,
-                    backgroundColor: 'rgba(59, 130, 246, 0.5)',
-                    borderColor: 'rgba(59, 130, 246, 1)',
-                    borderWidth: 1
-                }]
-            };
+    function updateStatus() {
+        fetch('/status')
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('stream_status').innerText = data.stream_status;
+                document.getElementById('last_frame_time').innerText = data.last_frame_time;
+            })
+            .catch(error => console.error('Error fetching status:', error));
+    }
 
-            const config = {
-                type: 'bar',
-                data: data,
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        x: {
-                            ticks: {
-                                maxRotation: 90,
-                                minRotation: 45
-                            }
-                        },
-                        y: {
-                            beginAtZero: true
+    function createOrUpdateChart(values) {
+        const ctx = document.getElementById('sensorChart').getContext('2d');
+        const labels = values.map((_, i) => `#${i + 1}`);
+
+        const data = {
+            labels: labels,
+            datasets: [{
+                label: 'Sensor Values',
+                data: values,
+                backgroundColor: 'rgba(59, 130, 246, 0.5)',
+                borderColor: 'rgba(59, 130, 246, 1)',
+                borderWidth: 1
+            }]
+        };
+
+        const config = {
+            type: 'bar',
+            data: data,
+            options: {
+                indexAxis: 'y', // Keep this to maintain horizontal bars
+                responsive: true,
+                maintainAspectRatio: false, // Critical for filling the container
+                scales: {
+                    x: {
+                        beginAtZero: true
+                    },
+                    y: {
+                        ticks: {
+                            maxRotation: 0,
+                            minRotation: 0,
+                            autoSkip: false // Prevent skipping labels
                         }
                     }
-                }
-            };
-
-            if (sensorChart) {
-                sensorChart.options.animation = false; // Disable animation on update
-                sensorChart.data = data;
-                sensorChart.update();
-            } else {
-                sensorChart = new Chart(ctx, config); // Will animate first time
-            }
-        }
-
-        function updateSensorData() {
-            fetch('/get-latest-sensor-data')
-                .then(response => response.json())
-                .then(data => {
-                    document.getElementById('sensor_timestamp').innerText = data.timestamp || "-";
-                    if (data.data && Array.isArray(data.data)) {
-                        const cleanedValues = data.data.map(v => parseFloat(v)).filter(v => !isNaN(v));
-                        createOrUpdateChart(cleanedValues);
+                },
+                plugins: {
+                    legend: {
+                        display: false
                     }
-
-                })
-                .catch(error => console.error('Error fetching sensor data:', error));
-        }
-
-        function updateMetrics() {
-            fetch('/metrics')
-                .then(response => response.json())
-                .then(data => {
-                    document.getElementById('people_detected_today').innerText = data.people_detected_today;
-                    document.getElementById('falls_box').innerText = data.falls_box;
-                    document.getElementById('falls_pose').innerText = data.falls_pose;
-                    document.getElementById('falls_bottom').innerText = data.falls_bottom;
-                    document.getElementById('falls_full').innerText = data.falls_full;
-                    document.getElementById('frames_processed').innerText = data.frames_processed;
-                })
-                .catch(error => console.error('Error fetching metrics:', error));
-        }
-
-
-        document.getElementById('start-recording').onclick = () => {
-            fetch('/start-recording', { method: 'POST' })
-                .then(res => res.json())
-                .then(data => {
-                    document.getElementById('recording-status').innerText = data.status;
-                })
-                .catch(e => console.error(e));
+                },
+                elements: {
+                    bar: {
+                        borderWidth: 1,
+                        borderSkipped: false,
+                        // Use flex instead of fixed barThickness
+                        barThickness: 'flex',
+                        categoryPercentage: 0.95,
+                        barPercentage: 0.9
+                    }
+                }
+            }
         };
 
-        document.getElementById('stop-recording').onclick = () => {
-            fetch('/stop-recording', { method: 'POST' })
-                .then(res => res.json())
-                .then(data => {
-                    document.getElementById('recording-status').innerText = data.status;
-                })
-                .catch(e => console.error(e));
-        };
 
-        setInterval(updateStatus, 1000);
-        setInterval(updateSensorData, 1000);
-        setInterval(updateMetrics, 1000);
-        
-        updateMetrics();
-        updateStatus();
-        updateSensorData();
-    </script>
+        if (sensorChart) {
+            sensorChart.options.animation = false; // Disable animation on update
+            sensorChart.data = data;
+            sensorChart.update();
+        } else {
+            sensorChart = new Chart(ctx, config); // Will animate first time
+        }
+    }
+
+    function updateSensorData() {
+        fetch('/get-latest-sensor-data')
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('sensor_timestamp').innerText = data.timestamp || "-";
+                if (data.data && Array.isArray(data.data)) {
+                    const cleanedValues = data.data.map(v => parseFloat(v)).filter(v => !isNaN(v));
+                    createOrUpdateChart(cleanedValues);
+                }
+
+            })
+            .catch(error => console.error('Error fetching sensor data:', error));
+    }
+
+    function updateMetrics() {
+        fetch('/metrics')
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('people_detected_today').innerText = data.people_detected_today;
+                document.getElementById('falls_box').innerText = data.falls_box;
+                document.getElementById('falls_pose').innerText = data.falls_pose;
+                document.getElementById('falls_bottom').innerText = data.falls_bottom;
+                document.getElementById('falls_full').innerText = data.falls_full;
+                document.getElementById('frames_processed').innerText = data.frames_processed;
+            })
+            .catch(error => console.error('Error fetching metrics:', error));
+    }
+
+
+    document.getElementById('start-recording').onclick = () => {
+        fetch('/start-recording', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('recording-status').innerText = data.status;
+            })
+            .catch(e => console.error(e));
+    };
+
+    document.getElementById('stop-recording').onclick = () => {
+        fetch('/stop-recording', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('recording-status').innerText = data.status;
+            })
+            .catch(e => console.error(e));
+    };
+
+    setInterval(updateStatus, 1000);
+    setInterval(updateSensorData, 1000);
+    setInterval(updateMetrics, 1000);
+
+    updateMetrics();
+    updateStatus();
+    updateSensorData();
+</script>
 </body>
 
 </html>
