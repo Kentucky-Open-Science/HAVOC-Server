@@ -106,6 +106,13 @@ def get_video_metrics():
     total_size_mb = round(total_size / (1024 * 1024), 2)  # in MB
     return count_total, count_today, total_size_mb
 
+def format_seconds(seconds):
+    seconds = int(seconds)
+    hours = seconds // 3600
+    minutes = (seconds % 3600) // 60
+    secs = seconds % 60
+    return f"{hours:02}:{minutes:02}:{secs:02}"
+
 
 # === EMAIL REPORT GENERATION ===
 def generate_html_report():
@@ -127,22 +134,23 @@ def generate_html_report():
 
         <h3>🎥 Video & Fall Detection</h3>
         <ul>
-            <li><strong>Frames processed:</strong> {metrics['frames_processed']}</li>
-            <li><strong>Falls (Box):</strong> {metrics['falls_box']}</li>
-            <li><strong>Falls (Pose):</strong> {metrics['falls_pose']}</li>
-            <li><strong>Falls (Bottom):</strong> {metrics['falls_bottom']}</li>
-            <li><strong>Falls (Full Consensus):</strong> {metrics['falls_full']}</li>
-            <li><strong>People detected today:</strong> {metrics['people_detected_today']}</li>
+        <li><strong>Frames processed:</strong> {metrics['frames_processed']}</li>
+        <li><strong>Falls (Box):</strong> {metrics['falls_box']}</li>
+        <li><strong>Falls (Pose):</strong> {metrics['falls_pose']}</li>
+        <li><strong>Falls (Bottom):</strong> {metrics['falls_bottom']}</li>
+        <li><strong>Falls (Full Consensus):</strong> {metrics['falls_full']}</li>
+        <li><strong>People detected today:</strong> {metrics['people_detected_today']}</li>
         </ul>
 
         <h3>📶 Stream/Uptime</h3>
         <ul>
             <li><strong>Stream offline events:</strong> {metrics['stream_offline_count']}</li>
             <li><strong>Stream frozen events:</strong> {metrics['stream_frozen_count']}</li>
-            <li><strong>Live time:</strong> {metrics['stream_live_seconds']}s</li>
-            <li><strong>Frozen time:</strong> {metrics['stream_frozen_seconds']}s</li>
-            <li><strong>Offline time:</strong> {metrics['stream_offline_seconds']}s</li>
+            <li><strong>Live time:</strong> {format_seconds(metrics['stream_live_seconds'])}</li>
+            <li><strong>Frozen time:</strong> {format_seconds(metrics['stream_frozen_seconds'])}</li>
+            <li><strong>Offline time:</strong> {format_seconds(metrics['stream_offline_seconds'])}</li>
         </ul>
+
 
         <h3>🌐 API Activity</h3>
         <ul>

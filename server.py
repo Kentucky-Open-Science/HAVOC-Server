@@ -19,6 +19,7 @@ from daily_reports import (
     increment,
     add_time,
     update_csv_metrics,
+    metrics,
 )
 
 
@@ -328,6 +329,10 @@ def trigger_report():
 
     return jsonify({"status": "sent" if success else "failed"})
 
+@flask_app.route('/metrics', methods=['GET'])
+def get_metrics():
+    return jsonify(metrics)
+
 def gen_frames():
     global last_pts, freeze_detected_time, duplicate_frame_count, last_frame_time, video_writer, recording
 
@@ -338,6 +343,8 @@ def gen_frames():
     last_person_increment_time = 0
     fall_cooldown = .5  # seconds
     person_cooldown = .5  # seconds
+    fall_persistence_time = 1.0  # seconds to hold last 'fallen' state active
+
 
     prev_falls = {
     "box": False,
@@ -352,6 +359,13 @@ def gen_frames():
     "bottom": 0,
     "full": 0
     }
+    
+    last_seen_fallen = {
+    "box": 0,
+    "pose": 0,
+    "bottom": 0,
+    "full": 0
+}
     
     while True:
         time.sleep(0.02)
@@ -412,7 +426,7 @@ def gen_frames():
                 half_w, half_h = width // 2, height // 2
 
                 # Get processed images
-                box_img, box_fallen, person_count = fall_detector.test_process_frame_box(cv2.resize(img.copy(), (half_w, half_h)))
+                box_img, box_fallen, person_count, unique_fallers = fall_detector.test_process_frame_box(cv2.resize(img.copy(), (half_w, half_h)))
                 pose_img, pose_fallen = fall_detector.test_process_frame_pose_fall(cv2.resize(img.copy(), (half_w, half_h)))
                 bottom_img, bottom_fallen = fall_detector.bottom_frac_fall_detection(cv2.resize(img.copy(), (half_w, half_h)))
                 combined_img, combined_fallen = fall_detector.combined_frame(cv2.resize(img.copy(), (half_w, half_h)))
@@ -420,15 +434,15 @@ def gen_frames():
                 #REPORT: increment person detected count 
                 now = time.time()
 
-                # REPORT: increment person detected count with cooldown buffer
+                # Person count increased → increment people_detected_today (with existing cooldown)
                 if person_count > last_person_count and now - last_person_increment_time > person_cooldown:
                     increment("people_detected_today")
                     last_person_increment_time = now
 
                 last_person_count = person_count
 
-                # REPORT: Increment fall detection metrics only on new fall with cooldown buffer
-                if box_fallen and not prev_falls["box"] and now - last_fall_times["box"] > fall_cooldown:
+                # Fall triggered → increment falls_box (already has per-person logic inside)
+                if box_fallen and now - last_fall_times["box"] > fall_cooldown:
                     increment("falls_box")
                     last_fall_times["box"] = now
 
