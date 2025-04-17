@@ -3,3 +3,5 @@ yolo_weights/
 codec_errors.log
 __pycache__/
 .env
+Temi_Sensor_Data
+Temi_VODs/

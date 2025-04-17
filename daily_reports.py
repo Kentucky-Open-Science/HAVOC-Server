@@ -84,20 +84,32 @@ def update_csv_metrics():
     metrics["total_csv_rows"] = row_count
 
 def get_video_metrics():
-    count = 0
+    count_total = 0
+    count_today = 0
     total_size = 0
+    today_str = datetime.now().strftime("%Y%m%d")
+
     if os.path.exists(VIDEO_DIR):
         for f in os.listdir(VIDEO_DIR):
             path = os.path.join(VIDEO_DIR, f)
             if f.endswith(".mp4") and os.path.isfile(path):
-                count += 1
+                count_total += 1
                 total_size += os.path.getsize(path)
-    return count, round(total_size / (1024 * 1024), 2)  # MB
+
+                # Check if the filename has today's date
+                if f.startswith("recorded_video_"):
+                    parts = f.replace("recorded_video_", "").split("_")
+                    if parts and parts[0] == today_str:
+                        count_today += 1
+
+    total_size_mb = round(total_size / (1024 * 1024), 2)  # in MB
+    return count_total, count_today, total_size_mb
+
 
 # === EMAIL REPORT GENERATION ===
 def generate_html_report():
     update_csv_metrics()
-    video_count, video_size = get_video_metrics()
+    count_total, count_today, total_size = get_video_metrics()
     disk_free = get_disk_space()
 
     html = f"""
@@ -139,9 +151,12 @@ def generate_html_report():
         <h3>🗂 File & Storage</h3>
         <ul>
             <li><strong>CSV size:</strong> {calculate_file_size(SENSOR_CSV_PATH)} MB</li>
-            <li><strong>Video files saved today:</strong> {video_count} ({video_size} MB)</li>
+            <li><strong>Videos saved today:</strong> {count_today}</li>
+            <li><strong>Total videos saved:</strong> {count_total}</li>
+            <li><strong>Total video size:</strong> {total_size} MB</li>
             <li><strong>Disk space remaining:</strong> {disk_free} GB</li>
         </ul>
+
 
         <p style='color:#95a5a6;'>Report generated automatically by Temi server at {datetime.now().strftime('%H:%M:%S')}.</p>
     </body>
