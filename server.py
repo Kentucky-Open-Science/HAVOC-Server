@@ -118,9 +118,9 @@ async def create_peer_connection():
                 # Assume JSON string with 'sensor_data' and 'should_record' flag
                 data = json.loads(message)
                 sensor_data = data.get('values')
-                should_record = data.get('should_record', False)  # Default to False if not provided
-                
+                should_record = data.get('should_record', False)  # Default to False if not provided, temi stream provides should_record flag for when he is patroling
                 # should_record = True  # Force recording for testing
+                
                 timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 
                 latest_sensor_data['data'] = sensor_data
@@ -138,7 +138,7 @@ async def create_peer_connection():
 
     pcs.add(peer)
     
-    #REPORT
+    #REPORT: increment every webrtc connection
     increment("webrtc_connections")
 
     return peer
@@ -187,20 +187,15 @@ async def offer(request):
     answer = await peer.createAnswer()
     await peer.setLocalDescription(answer)
 
-    #REPORT
+    #REPORT: increment every api call
     increment("http_api_calls")
 
     return web.json_response({
         "sdp": peer.localDescription.sdp,
         "type": peer.localDescription.type
     })
-        
-
-
-
 
 app.router.add_post("/offer", offer)
-
 # -------- Flask video feed server ----------
 flask_app = Flask(__name__)
 
@@ -235,14 +230,14 @@ def get_status():
         else:
             stream_status = "Live"
     
-    #REPORT            
+    #REPORT: increment every api call
     increment("http_api_calls")
 
     return jsonify({'stream_status': stream_status, 'last_frame_time': last_frame_time})
 
 @flask_app.route('/video_feed')
 def video_feed():
-    #REPORT            
+    #REPORT: increment every api call     
     increment("http_api_calls")
 
     return Response(gen_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
@@ -268,14 +263,14 @@ def sensor_data():
     # if should_record:                                 <------ Rest API version to record data from another source
     #     record_sensor_data_to_csv(data, timestamp)
     
-    #REPORT            
+    #REPORT: increment every api call      
     increment("http_api_calls")
     
     return jsonify({"status": "Sensor data received"}), 200
 
 @flask_app.route('/get-latest-sensor-data', methods=['GET'])
 def get_latest_sensor_data():   
-    #REPORT            
+    #REPORT: increment every api call
     increment("http_api_calls")
 
     return jsonify(latest_sensor_data), 200
@@ -299,7 +294,7 @@ def start_recording():
         video_writer = cv2.VideoWriter(filename, fourcc, 12.0, (640, 480)) # changed to 12 fps
         recording = True
         
-    #REPORT            
+    #REPORT: increment every api call
     increment("http_api_calls")
 
     return jsonify({'status': 'recording started', 'filename': filename}), 200
@@ -316,7 +311,7 @@ def stop_recording():
         video_writer.release()
         video_writer = None
         
-    #REPORT            
+    #REPORT: increment every api call
     increment("http_api_calls")
 
     return jsonify({'status': 'recording stopped'}), 200
@@ -327,7 +322,7 @@ def stop_recording():
 def trigger_report():
     success = send_email_report()
     
-    #REPORT            
+    #REPORT: increment every api call
     increment("http_api_calls")
 
     return jsonify({"status": "sent" if success else "failed"})
@@ -361,21 +356,25 @@ def gen_frames():
                 box_img, box_fallen = fall_detector.test_process_frame_box(cv2.resize(img.copy(), (half_w, half_h)))
                 pose_img, pose_fallen = fall_detector.test_process_frame_pose_fall(cv2.resize(img.copy(), (half_w, half_h)))
                 bottom_img, bottom_fallen = fall_detector.bottom_frac_fall_detection(cv2.resize(img.copy(), (half_w, half_h)))
-                combined_img = fall_detector.combined_frame(cv2.resize(img.copy(), (half_w, half_h)))
+                combined_img, combined_fallen = fall_detector.combined_frame(cv2.resize(img.copy(), (half_w, half_h)))
+                
+                # === Increment fall detection metrics ===
+                if box_fallen: increment("falls_box")
+                if pose_fallen: increment("falls_pose")
+                if bottom_fallen: increment("falls_bottom")
+                if combined_fallen: increment("falls_full")
                 
                 # Combine into 2x2 grid
                 top_row = np.hstack((box_img, pose_img))
                 bottom_row = np.hstack((bottom_img, combined_img))
                 grid_img = np.vstack((top_row, bottom_row))
                 
+                # === REPORT: increment for every processed frame
+                increment("frames_processed")       
+
                 if recording and video_writer is not None:
                     resized_frame = cv2.resize(grid_img, (640, 480))
                     video_writer.write(resized_frame)
-                    
-                    #REPORT
-                    increment("frames_processed")
-
-
 
                 ret, buffer = cv2.imencode('.jpg', grid_img)
                 frame_bytes = buffer.tobytes()
@@ -427,7 +426,7 @@ def record_sensor_data_to_csv(sensor_data, timestamp):
             row_data['timestamp'] = timestamp
             writer.writerow(row_data)
             
-            #REPORT
+            #REPORT: increment every patrol event and update csv metrics
             increment("record_triggers_today")
             update_csv_metrics()        
 
@@ -441,7 +440,7 @@ def record_sensor_data_to_csv(sensor_data, timestamp):
             # Write data row with timestamp
             writer.writerow([timestamp] + sensor_data)
             
-            #REPORT
+            #REPORT: increment every patrol event and update csv metrics
             increment("record_triggers_today")
             update_csv_metrics()   
 
@@ -455,7 +454,7 @@ def record_sensor_data_to_csv(sensor_data, timestamp):
             # Write data row with timestamp
             writer.writerow([timestamp, sensor_data])
             
-            #REPORT
+            #REPORT: increment every patrol event and update csv metrics
             increment("record_triggers_today")
             update_csv_metrics()   
 

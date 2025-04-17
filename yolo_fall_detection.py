@@ -1,6 +1,8 @@
 import cv2
 import math
 from ultralytics import YOLO
+from daily_reports import increment
+
 
 
 class FallDetector:
@@ -209,6 +211,8 @@ class FallDetector:
 
 
     def combined_frame(self, img):
+        fallen = False
+
         height, width, _ = img.shape
         box_img, box_fallen = self.test_process_frame_box(img.copy())
         pose_img, pose_fallen = self.test_process_frame_pose_fall(img.copy())
@@ -218,10 +222,11 @@ class FallDetector:
         combined_img = cv2.addWeighted(combined_img, 1, bottom_img, 0.34, 0)
 
         if box_fallen and pose_fallen and bottom_fallen:
+            fallen = True
             cv2.putText(combined_img, "PERSON IS FALLEN", (35, 50),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.8, self.Red, 3)
 
-        return combined_img
+        return combined_img, fallen
 
 
     def reset(self):
