@@ -214,7 +214,7 @@ class FallDetector:
         fallen = False
 
         height, width, _ = img.shape
-        box_img, box_fallen = self.test_process_frame_box(img.copy())
+        box_img, box_fallen, _ = self.test_process_frame_box(img.copy())
         pose_img, pose_fallen = self.test_process_frame_pose_fall(img.copy())
         bottom_img, bottom_fallen = self.bottom_frac_fall_detection(img.copy())
 
