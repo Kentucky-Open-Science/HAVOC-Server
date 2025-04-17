@@ -336,8 +336,8 @@ def gen_frames():
     
     last_person_count = 0
     last_person_increment_time = 0
-    fall_cooldown = 1.0  # seconds
-    person_cooldown = 1.0  # seconds
+    fall_cooldown = .5  # seconds
+    person_cooldown = .5  # seconds
 
     prev_falls = {
     "box": False,
