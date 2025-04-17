@@ -114,8 +114,9 @@
             type: 'bar',
             data: data,
             options: {
+                indexAxis: 'y', // Keep this to maintain horizontal bars
                 responsive: true,
-                maintainAspectRatio: false,  // This is crucial for filling the height
+                maintainAspectRatio: false, // Critical for filling the container
                 scales: {
                     x: {
                         beginAtZero: true
@@ -124,24 +125,23 @@
                         ticks: {
                             maxRotation: 0,
                             minRotation: 0,
-                            autoSkip: false  // Don't skip labels
+                            autoSkip: false // Prevent skipping labels
                         }
                     }
                 },
-                layout: {
-                    padding: {
-                        top: 10,
-                        bottom: 10
+                plugins: {
+                    legend: {
+                        display: false
                     }
                 },
                 elements: {
                     bar: {
                         borderWidth: 1,
                         borderSkipped: false,
-                        // Reduce these values to create more bars that fill the space
-                        barThickness: 'flex',  // Let Chart.js calculate appropriate thickness
+                        // Use flex instead of fixed barThickness
+                        barThickness: 'flex',
                         categoryPercentage: 0.95,
-                        barPercentage: 0.95
+                        barPercentage: 0.9
                     }
                 }
             }
