@@ -2,7 +2,6 @@ import cv2
 import math
 from ultralytics import YOLO
 
-
 class FallDetector:
     """A class for detecting people and identifying potential falls using YOLO."""
 
@@ -31,9 +30,10 @@ class FallDetector:
 
     def test_process_frame_box(self, img):
         """Processes a single frame, detects people, and labels falls."""
-        results = self.model(img, stream=True, conf=self.conf_threshold)
+        results = self.model(img, stream=True, conf=self.conf_threshold, verbose=False)
         fallen = False
         height, width, _ = img.shape
+        person_count = 0
 
 
 
@@ -42,6 +42,8 @@ class FallDetector:
 
             for box in boxes:
                 if int(box.cls[0]) == 0:  # Only detect "person"
+                    person_count += 1
+
                     x1, y1, x2, y2 = map(int, box.xyxy[0])
                     confidence = math.ceil((box.conf[0] * 100)) / 100
 
@@ -65,7 +67,7 @@ class FallDetector:
                         # Text in top left corner
                         cv2.putText(img, "Fall Detected", (20, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.UKBlue, 2)
 
-        return img, fallen
+        return img, fallen, person_count
     
     def test_process_frame_pose(self, img):
         """
@@ -74,7 +76,7 @@ class FallDetector:
         :param img: The input frame (numpy array).
         :return: Frame with keypoints plotted.
         """
-        results = self.model(img, stream=True, conf=self.conf_threshold)
+        results = self.model(img, stream=True, conf=self.conf_threshold, verbose=False)
 
         # Iterate over the detection results
         for result in results:
@@ -99,7 +101,7 @@ class FallDetector:
         return img
     
     def test_process_frame_pose_fall(self, img):
-        results = self.model(img, stream=True, conf=self.conf_threshold)
+        results = self.model(img, stream=True, conf=self.conf_threshold, verbose=False)
         fallen = False
         height, width, _ = img.shape
 
@@ -184,7 +186,7 @@ class FallDetector:
 
         cv2.line(img, (0, line_height), (width, line_height), self.UKBlue, 2)
 
-        results = self.model(img, conf=self.conf_threshold)
+        results = self.model(img, conf=self.conf_threshold, verbose=False)
         fallen = False
 
         for r in results:
@@ -209,8 +211,10 @@ class FallDetector:
 
 
     def combined_frame(self, img):
+        fallen = False
+
         height, width, _ = img.shape
-        box_img, box_fallen = self.test_process_frame_box(img.copy())
+        box_img, box_fallen, _ = self.test_process_frame_box(img.copy())
         pose_img, pose_fallen = self.test_process_frame_pose_fall(img.copy())
         bottom_img, bottom_fallen = self.bottom_frac_fall_detection(img.copy())
 
@@ -218,10 +222,11 @@ class FallDetector:
         combined_img = cv2.addWeighted(combined_img, 1, bottom_img, 0.34, 0)
 
         if box_fallen and pose_fallen and bottom_fallen:
+            fallen = True
             cv2.putText(combined_img, "PERSON IS FALLEN", (35, 50),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.8, self.Red, 3)
 
-        return combined_img
+        return combined_img, fallen
 
 
     def reset(self):

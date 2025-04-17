@@ -5,14 +5,22 @@ from aiohttp import web
 from aiortc import MediaStreamTrack, RTCPeerConnection, RTCSessionDescription
 from aiortc.contrib.media import MediaRelay
 from flask import Flask, Response, render_template, jsonify, request
-from flask import Flask, Response, render_template, jsonify, request
 import threading
 import time
 from datetime import datetime
 import numpy as np
 import os
 import json
+import time
 from aiortc.sdp import candidate_from_sdp, candidate_to_sdp, SessionDescription as SDPDescription
+from daily_reports import (
+    send_email_report,
+    schedule_daily_report,
+    increment,
+    add_time,
+    update_csv_metrics,
+)
+
 
 from yolo_fall_detection import FallDetector  # Import the FallDetector class
 
@@ -32,6 +40,8 @@ duplicate_frame_count = 0
 duplicate_threshold = 5
 freeze_threshold = 5.0
 last_frame_time = "N/A"
+
+
 
 # Load offline placeholder image
 filler_image_path = os.path.join('static', 'temiFace_screen_saver.png')
@@ -106,18 +116,32 @@ async def create_peer_connection():
         @channel.on("message")
         def on_message(message):
             try:
-                # Assume JSON string with 'sensor_data'
+                # Assume JSON string with 'sensor_data' and 'should_record' flag
                 data = json.loads(message)
                 sensor_data = data.get('values')
+                should_record = data.get('should_record', False)  # Default to False if not provided, temi stream provides should_record flag for when he is patroling
+                # should_record = True  # Force recording for testing
+                
                 timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                
                 latest_sensor_data['data'] = sensor_data
                 latest_sensor_data['timestamp'] = timestamp
+                latest_sensor_data['should_record'] = should_record
 
-                logger.info(f"[{timestamp}] DataChannel sensor data: {sensor_data}")
+                logger.info(f"[{timestamp}] DataChannel sensor data: {sensor_data}, Record flag: {should_record}")
+                
+                # Record to CSV if flag is True
+                if should_record:
+                    record_sensor_data_to_csv(sensor_data, timestamp)
+                
             except Exception as e:
                 logger.error(f"Failed to process DataChannel message: {e}")
 
     pcs.add(peer)
+    
+    #REPORT: increment every webrtc connection
+    increment("webrtc_connections")
+
     return peer
 
 async def offer(request):
@@ -164,15 +188,15 @@ async def offer(request):
     answer = await peer.createAnswer()
     await peer.setLocalDescription(answer)
 
+    #REPORT: increment every api call
+    increment("http_api_calls")
+
     return web.json_response({
         "sdp": peer.localDescription.sdp,
         "type": peer.localDescription.type
     })
 
-
-
 app.router.add_post("/offer", offer)
-
 # -------- Flask video feed server ----------
 flask_app = Flask(__name__)
 
@@ -206,10 +230,17 @@ def get_status():
             stream_status = "Frozen"
         else:
             stream_status = "Live"
+    
+    #REPORT: increment every api call
+    increment("http_api_calls")
+
     return jsonify({'stream_status': stream_status, 'last_frame_time': last_frame_time})
 
 @flask_app.route('/video_feed')
 def video_feed():
+    #REPORT: increment every api call     
+    increment("http_api_calls")
+
     return Response(gen_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 # Global variable to hold latest sensor data
@@ -219,15 +250,30 @@ latest_sensor_data = {"data": None, "timestamp": None}
 def sensor_data():
     global latest_sensor_data
     data = request.json.get('sensor_data')
+    should_record = request.json.get('should_record', False)
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     
-    latest_sensor_data = {"data": data, "timestamp": timestamp}
-    print(f"[{timestamp}] Received sensor data: {data}")
-
+    latest_sensor_data = {
+        "data": data, 
+        "timestamp": timestamp,
+        "should_record": should_record
+    }
+    print(f"[{timestamp}] Received sensor data: {data}, Record flag: {should_record}")
+    
+    # # Record to CSV if flag is True
+    # if should_record:                                 <------ Rest API version to record data from another source
+    #     record_sensor_data_to_csv(data, timestamp)
+    
+    #REPORT: increment every api call      
+    increment("http_api_calls")
+    
     return jsonify({"status": "Sensor data received"}), 200
 
 @flask_app.route('/get-latest-sensor-data', methods=['GET'])
 def get_latest_sensor_data():   
+    #REPORT: increment every api call
+    increment("http_api_calls")
+
     return jsonify(latest_sensor_data), 200
 
 # Additional imports for recording
@@ -249,6 +295,9 @@ def start_recording():
         video_writer = cv2.VideoWriter(filename, fourcc, 12.0, (640, 480)) # changed to 12 fps
         recording = True
         
+    #REPORT: increment every api call
+    increment("http_api_calls")
+
     return jsonify({'status': 'recording started', 'filename': filename}), 200
 
 @flask_app.route('/stop-recording', methods=['POST'])
@@ -262,17 +311,89 @@ def stop_recording():
         recording = False
         video_writer.release()
         video_writer = None
+        
+    #REPORT: increment every api call
+    increment("http_api_calls")
 
     return jsonify({'status': 'recording stopped'}), 200
 
 
+# === MANUAL TRIGGER ROUTE ===
+@flask_app.route("/send-report-now", methods=["GET"])
+def trigger_report():
+    success = send_email_report()
+    
+    #REPORT: increment every api call
+    increment("http_api_calls")
+
+    return jsonify({"status": "sent" if success else "failed"})
+
 def gen_frames():
     global last_pts, freeze_detected_time, duplicate_frame_count, last_frame_time, video_writer, recording
 
+    last_state = None
+    last_state_change_time = time.time()
+    
+    last_person_count = 0
+    last_person_increment_time = 0
+    fall_cooldown = .5  # seconds
+    person_cooldown = .5  # seconds
+
+    prev_falls = {
+    "box": False,
+    "pose": False,
+    "bottom": False,
+    "full": False
+    }
+    
+    last_fall_times = {
+    "box": 0,
+    "pose": 0,
+    "bottom": 0,
+    "full": 0
+    }
+    
     while True:
         time.sleep(0.02)
         frame = frame_holder.get('frame', offline_bytes)
 
+        # Determine the stream state
+        current_state = "live"
+        if isinstance(frame, bytes) or frame is None:
+            current_state = "offline"
+        elif freeze_detected_time and (
+            duplicate_frame_count > duplicate_threshold or 
+            time.time() - freeze_detected_time > freeze_threshold
+        ):
+            current_state = "frozen"
+
+        # Track time spent in the current state
+        if current_state != last_state:
+            if last_state is not None:
+                elapsed = int(time.time() - last_state_change_time)
+                if last_state == "live":
+                    add_time("stream_live_seconds", elapsed)
+                elif last_state == "frozen":
+                    add_time("stream_frozen_seconds", elapsed)
+                elif last_state == "offline":
+                    add_time("stream_offline_seconds", elapsed)
+
+            # Count new state events
+            if current_state == "frozen":
+                increment("stream_frozen_count")
+            elif current_state == "offline":
+                increment("stream_offline_count")
+
+            last_state = current_state
+            last_state_change_time = time.time()
+        else:
+            # Accumulate time every second (approximate)
+            elapsed = int(time.time() - last_state_change_time)
+            if elapsed >= 1:
+                add_time(f"stream_{current_state}_seconds", elapsed)
+                last_state_change_time = time.time()
+
+        # ====== Frame Processing ======
         if isinstance(frame, bytes):
             frame_bytes = frame
             if last_pts is not None:
@@ -291,20 +412,56 @@ def gen_frames():
                 half_w, half_h = width // 2, height // 2
 
                 # Get processed images
-                box_img, box_fallen = fall_detector.test_process_frame_box(cv2.resize(img.copy(), (half_w, half_h)))
+                box_img, box_fallen, person_count = fall_detector.test_process_frame_box(cv2.resize(img.copy(), (half_w, half_h)))
                 pose_img, pose_fallen = fall_detector.test_process_frame_pose_fall(cv2.resize(img.copy(), (half_w, half_h)))
                 bottom_img, bottom_fallen = fall_detector.bottom_frac_fall_detection(cv2.resize(img.copy(), (half_w, half_h)))
-                combined_img = fall_detector.combined_frame(cv2.resize(img.copy(), (half_w, half_h)))
+                combined_img, combined_fallen = fall_detector.combined_frame(cv2.resize(img.copy(), (half_w, half_h)))
                 
+                #REPORT: increment person detected count 
+                now = time.time()
+
+                # REPORT: increment person detected count with cooldown buffer
+                if person_count > last_person_count and now - last_person_increment_time > person_cooldown:
+                    increment("people_detected_today")
+                    last_person_increment_time = now
+
+                last_person_count = person_count
+
+                # REPORT: Increment fall detection metrics only on new fall with cooldown buffer
+                if box_fallen and not prev_falls["box"] and now - last_fall_times["box"] > fall_cooldown:
+                    increment("falls_box")
+                    last_fall_times["box"] = now
+
+                if pose_fallen and not prev_falls["pose"] and now - last_fall_times["pose"] > fall_cooldown:
+                    increment("falls_pose")
+                    last_fall_times["pose"] = now
+
+                if bottom_fallen and not prev_falls["bottom"] and now - last_fall_times["bottom"] > fall_cooldown:
+                    increment("falls_bottom")
+                    last_fall_times["bottom"] = now
+
+                if combined_fallen and not prev_falls["full"] and now - last_fall_times["full"] > fall_cooldown:
+                    increment("falls_full")
+                    last_fall_times["full"] = now
+
+
+                # Update state tracking
+                prev_falls["box"] = box_fallen
+                prev_falls["pose"] = pose_fallen
+                prev_falls["bottom"] = bottom_fallen
+                prev_falls["full"] = combined_fallen
+
                 # Combine into 2x2 grid
                 top_row = np.hstack((box_img, pose_img))
                 bottom_row = np.hstack((bottom_img, combined_img))
                 grid_img = np.vstack((top_row, bottom_row))
                 
+                # === REPORT: increment for every processed frame
+                increment("frames_processed")       
+
                 if recording and video_writer is not None:
                     resized_frame = cv2.resize(grid_img, (640, 480))
                     video_writer.write(resized_frame)
-
 
                 ret, buffer = cv2.imencode('.jpg', grid_img)
                 frame_bytes = buffer.tobytes()
@@ -324,6 +481,72 @@ def gen_frames():
                b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
 
 
+import csv
+import os
+from datetime import datetime
+
+def record_sensor_data_to_csv(sensor_data, timestamp):
+    """Record sensor data to a master CSV file for long-term accumulation"""
+    if not sensor_data:
+        return
+
+    # Create directory if it doesn't exist
+    csv_dir = "Temi_Sensor_Data"
+    os.makedirs(csv_dir, exist_ok=True)
+
+    # Master file path
+    csv_path = os.path.join(csv_dir, "sensor_data_master.csv")
+
+    # Check if file exists to determine if we need to write headers
+    file_exists = os.path.isfile(csv_path)
+
+    with open(csv_path, 'a', newline='') as csvfile:
+        if isinstance(sensor_data, dict):
+            fieldnames = ['timestamp'] + list(sensor_data.keys())
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+
+            # Write header if file is new
+            if not file_exists:
+                writer.writeheader()
+
+            # Write data row with timestamp
+            row_data = sensor_data.copy()
+            row_data['timestamp'] = timestamp
+            writer.writerow(row_data)
+            
+            #REPORT: increment every patrol event and update csv metrics
+            increment("record_triggers_today")
+            update_csv_metrics()        
+
+        elif isinstance(sensor_data, list):
+            writer = csv.writer(csvfile)
+
+            # Write header if file is new
+            if not file_exists:
+                writer.writerow(['timestamp'] + [f'value_{i}' for i in range(len(sensor_data))])
+
+            # Write data row with timestamp
+            writer.writerow([timestamp] + sensor_data)
+            
+            #REPORT: increment every patrol event and update csv metrics
+            increment("record_triggers_today")
+            update_csv_metrics()   
+
+        else:
+            writer = csv.writer(csvfile)
+
+            # Write header if file is new
+            if not file_exists:
+                writer.writerow(['timestamp', 'value'])
+
+            # Write data row with timestamp
+            writer.writerow([timestamp, sensor_data])
+            
+            #REPORT: increment every patrol event and update csv metrics
+            increment("record_triggers_today")
+            update_csv_metrics()   
+
+
 # -------- Main Execution ----------
 if __name__ == "__main__":
     flask_thread = threading.Thread(
@@ -340,5 +563,10 @@ if __name__ == "__main__":
         logger.info("🚀 aiohttp signaling server started on http://0.0.0.0:5432")
         while True:
             await asyncio.sleep(3600)
+            
+            
+    from daily_reports import schedule_daily_report
+    schedule_daily_report()
+
 
     asyncio.run(aiohttp_main())
