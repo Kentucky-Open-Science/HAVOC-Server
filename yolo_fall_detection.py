@@ -1,9 +1,6 @@
 import cv2
 import math
 from ultralytics import YOLO
-from daily_reports import increment
-
-
 
 class FallDetector:
     """A class for detecting people and identifying potential falls using YOLO."""
@@ -36,6 +33,7 @@ class FallDetector:
         results = self.model(img, stream=True, conf=self.conf_threshold, verbose=False)
         fallen = False
         height, width, _ = img.shape
+        person_count = 0
 
 
 
@@ -44,6 +42,8 @@ class FallDetector:
 
             for box in boxes:
                 if int(box.cls[0]) == 0:  # Only detect "person"
+                    person_count += 1
+
                     x1, y1, x2, y2 = map(int, box.xyxy[0])
                     confidence = math.ceil((box.conf[0] * 100)) / 100
 
@@ -67,7 +67,7 @@ class FallDetector:
                         # Text in top left corner
                         cv2.putText(img, "Fall Detected", (20, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.UKBlue, 2)
 
-        return img, fallen
+        return img, fallen, person_count
     
     def test_process_frame_pose(self, img):
         """

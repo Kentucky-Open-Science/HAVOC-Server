@@ -327,14 +327,62 @@ def trigger_report():
 
     return jsonify({"status": "sent" if success else "failed"})
 
-
 def gen_frames():
     global last_pts, freeze_detected_time, duplicate_frame_count, last_frame_time, video_writer, recording
+
+    last_state = None
+    last_state_change_time = time.time()
+    
+    last_person_count = 0
+
+    prev_falls = {
+    "box": False,
+    "pose": False,
+    "bottom": False,
+    "full": False
+    }
 
     while True:
         time.sleep(0.02)
         frame = frame_holder.get('frame', offline_bytes)
 
+        # Determine the stream state
+        current_state = "live"
+        if isinstance(frame, bytes) or frame is None:
+            current_state = "offline"
+        elif freeze_detected_time and (
+            duplicate_frame_count > duplicate_threshold or 
+            time.time() - freeze_detected_time > freeze_threshold
+        ):
+            current_state = "frozen"
+
+        # Track time spent in the current state
+        if current_state != last_state:
+            if last_state is not None:
+                elapsed = int(time.time() - last_state_change_time)
+                if last_state == "live":
+                    add_time("stream_live_seconds", elapsed)
+                elif last_state == "frozen":
+                    add_time("stream_frozen_seconds", elapsed)
+                elif last_state == "offline":
+                    add_time("stream_offline_seconds", elapsed)
+
+            # Count new state events
+            if current_state == "frozen":
+                increment("stream_frozen_count")
+            elif current_state == "offline":
+                increment("stream_offline_count")
+
+            last_state = current_state
+            last_state_change_time = time.time()
+        else:
+            # Accumulate time every second (approximate)
+            elapsed = int(time.time() - last_state_change_time)
+            if elapsed >= 1:
+                add_time(f"stream_{current_state}_seconds", elapsed)
+                last_state_change_time = time.time()
+
+        # ====== Frame Processing ======
         if isinstance(frame, bytes):
             frame_bytes = frame
             if last_pts is not None:
@@ -353,17 +401,32 @@ def gen_frames():
                 half_w, half_h = width // 2, height // 2
 
                 # Get processed images
-                box_img, box_fallen = fall_detector.test_process_frame_box(cv2.resize(img.copy(), (half_w, half_h)))
+                box_img, box_fallen, person_count = fall_detector.test_process_frame_box(cv2.resize(img.copy(), (half_w, half_h)))
                 pose_img, pose_fallen = fall_detector.test_process_frame_pose_fall(cv2.resize(img.copy(), (half_w, half_h)))
                 bottom_img, bottom_fallen = fall_detector.bottom_frac_fall_detection(cv2.resize(img.copy(), (half_w, half_h)))
                 combined_img, combined_fallen = fall_detector.combined_frame(cv2.resize(img.copy(), (half_w, half_h)))
                 
-                # === Increment fall detection metrics ===
-                if box_fallen: increment("falls_box")
-                if pose_fallen: increment("falls_pose")
-                if bottom_fallen: increment("falls_bottom")
-                if combined_fallen: increment("falls_full")
-                
+                #REPORT: increment person detected count 
+                if person_count > last_person_count:
+                    increment("people_detected_today")
+                last_person_count = person_count
+
+                # REPORT: Increment fall detection metrics only on transition
+                if box_fallen and not prev_falls["box"]:
+                    increment("falls_box")
+                if pose_fallen and not prev_falls["pose"]:
+                    increment("falls_pose")
+                if bottom_fallen and not prev_falls["bottom"]:
+                    increment("falls_bottom")
+                if combined_fallen and not prev_falls["full"]:
+                    increment("falls_full")
+
+                # Update state tracking
+                prev_falls["box"] = box_fallen
+                prev_falls["pose"] = pose_fallen
+                prev_falls["bottom"] = bottom_fallen
+                prev_falls["full"] = combined_fallen
+
                 # Combine into 2x2 grid
                 top_row = np.hstack((box_img, pose_img))
                 bottom_row = np.hstack((bottom_img, combined_img))
@@ -392,6 +455,7 @@ def gen_frames():
 
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+
 
 import csv
 import os

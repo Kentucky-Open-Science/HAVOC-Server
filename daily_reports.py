@@ -30,6 +30,7 @@ metrics = {
     "falls_pose": 0,
     "falls_bottom": 0,
     "falls_full": 0,
+    "people_detected_today": 0,
     "stream_offline_count": 0,
     "stream_frozen_count": 0,
     "stream_live_seconds": 0,
@@ -54,8 +55,8 @@ def set_total_csv_rows(count):
 def reset_daily_metrics():
     for key in metrics:
         if key.endswith("today") or key in ["frames_processed", "falls_box", "falls_pose", "falls_bottom", "falls_full",
-                                             "stream_offline_count", "stream_frozen_count", "stream_live_seconds",
-                                             "stream_frozen_seconds", "stream_offline_seconds",
+                                             "people_detected_today", "stream_offline_count", "stream_frozen_count",
+                                             "stream_live_seconds", "stream_frozen_seconds", "stream_offline_seconds",
                                              "webrtc_connections", "http_api_calls"]:
             metrics[key] = 0
 
@@ -131,6 +132,7 @@ def generate_html_report():
             <li><strong>Falls (Pose):</strong> {metrics['falls_pose']}</li>
             <li><strong>Falls (Bottom):</strong> {metrics['falls_bottom']}</li>
             <li><strong>Falls (Full Consensus):</strong> {metrics['falls_full']}</li>
+            <li><strong>People detected today:</strong> {metrics['people_detected_today']}</li>
         </ul>
 
         <h3>📶 Stream/Uptime</h3>
