@@ -19,6 +19,7 @@ from daily_reports import (
     increment,
     add_time,
     update_csv_metrics,
+    metrics,
 )
 
 
@@ -327,6 +328,10 @@ def trigger_report():
     increment("http_api_calls")
 
     return jsonify({"status": "sent" if success else "failed"})
+
+@flask_app.route('/metrics', methods=['GET'])
+def get_metrics():
+    return jsonify(metrics)
 
 def gen_frames():
     global last_pts, freeze_detected_time, duplicate_frame_count, last_frame_time, video_writer, recording
