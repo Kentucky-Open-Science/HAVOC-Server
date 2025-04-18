@@ -203,7 +203,7 @@ async def offer(request):
 app.router.add_post("/offer", offer)
 # -------- Flask video feed server ----------
 flask_app = Flask(__name__)
-CORS(app)  # <-- Enable CORS for all routes
+CORS(flask_app)  # <-- Enable CORS for all routes
 
 @flask_app.route('/')
 def index():
