@@ -1,8 +1,7 @@
 aiohttp
-aiohttp-cors
 aiortc
-asyncio
+flask
 opencv-python
 numpy
-json5
 ultralytics
+python-dotenv
