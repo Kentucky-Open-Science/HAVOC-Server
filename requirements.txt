@@ -5,3 +5,4 @@ opencv-python
 numpy
 ultralytics
 python-dotenv
+flask-cors
