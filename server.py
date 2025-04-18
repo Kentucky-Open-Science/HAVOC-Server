@@ -5,6 +5,9 @@ from aiohttp import web
 from aiortc import MediaStreamTrack, RTCPeerConnection, RTCSessionDescription
 from aiortc.contrib.media import MediaRelay
 from flask import Flask, Response, render_template, jsonify, request
+from flask import Flask
+from flask_cors import CORS
+
 import threading
 import time
 from datetime import datetime
@@ -200,6 +203,7 @@ async def offer(request):
 app.router.add_post("/offer", offer)
 # -------- Flask video feed server ----------
 flask_app = Flask(__name__)
+CORS(app)  # <-- Enable CORS for all routes
 
 @flask_app.route('/')
 def index():
