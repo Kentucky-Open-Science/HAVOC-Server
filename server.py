@@ -374,12 +374,12 @@ def gen_frames():
         # Determine the stream state
         current_state = "live"
         if isinstance(frame, bytes) or frame is None:
-            current_state = "offline"
+            current_state = "frozen"
         elif freeze_detected_time and (
             duplicate_frame_count > duplicate_threshold or 
             time.time() - freeze_detected_time > freeze_threshold
         ):
-            current_state = "frozen"
+            current_state = "offline"
 
         # Track time spent in the current state
         if current_state != last_state:
