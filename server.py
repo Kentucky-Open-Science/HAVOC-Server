@@ -5,6 +5,9 @@ from aiohttp import web
 from aiortc import MediaStreamTrack, RTCPeerConnection, RTCSessionDescription
 from aiortc.contrib.media import MediaRelay
 from flask import Flask, Response, render_template, jsonify, request
+from flask import Flask
+from flask_cors import CORS
+
 import threading
 import time
 from datetime import datetime
@@ -200,6 +203,7 @@ async def offer(request):
 app.router.add_post("/offer", offer)
 # -------- Flask video feed server ----------
 flask_app = Flask(__name__)
+CORS(flask_app)  # <-- Enable CORS for all routes
 
 @flask_app.route('/')
 def index():
@@ -374,12 +378,12 @@ def gen_frames():
         # Determine the stream state
         current_state = "live"
         if isinstance(frame, bytes) or frame is None:
-            current_state = "offline"
+            current_state = "frozen"
         elif freeze_detected_time and (
             duplicate_frame_count > duplicate_threshold or 
             time.time() - freeze_detected_time > freeze_threshold
         ):
-            current_state = "frozen"
+            current_state = "offline"
 
         # Track time spent in the current state
         if current_state != last_state:
