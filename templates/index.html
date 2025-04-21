@@ -174,12 +174,13 @@
         fetch('/metrics')
             .then(response => response.json())
             .then(data => {
-                document.getElementById('people_detected_today').innerText = data.people_detected_today;
-                document.getElementById('falls_box').innerText = data.falls_box;
-                document.getElementById('falls_pose').innerText = data.falls_pose;
-                document.getElementById('falls_bottom').innerText = data.falls_bottom;
-                document.getElementById('falls_full').innerText = data.falls_full;
-                document.getElementById('frames_processed').innerText = data.frames_processed;
+                document.getElementById('Smells').innerText = data.record_triggers_today;
+                document.getElementById('People').innerText = data.people_detected_today;
+                document.getElementById('Box').innerText = data.falls_box;
+                document.getElementById('Pose').innerText = data.falls_pose;
+                document.getElementById('Bottom').innerText = data.falls_bottom;
+                document.getElementById('Full').innerText = data.falls_full;
+                document.getElementById('Frames').innerText = data.frames_processed;
             })
             .catch(error => console.error('Error fetching metrics:', error));
     }
