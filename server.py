@@ -519,50 +519,42 @@ def record_sensor_data_to_csv(sensor_data, timestamp):
     file_exists = os.path.isfile(csv_path)
 
     with open(csv_path, 'a', newline='') as csvfile:
-        if isinstance(sensor_data, dict):
+        if isinstance(sensor_data, list):
+            if len(sensor_data) != 66:
+                logger.warning(f"Invalid sensor data length: {len(sensor_data)} (expected 66). Data not saved.")
+                return  # Skip saving invalid data
+
+            writer = csv.writer(csvfile)
+
+            if not file_exists:
+                writer.writerow(['timestamp'] + [f'value_{i}' for i in range(66)])
+
+            writer.writerow([timestamp] + sensor_data)
+
+            increment("record_triggers_today")
+            update_csv_metrics()
+
+        elif isinstance(sensor_data, dict):
+            if len(sensor_data) != 66:
+                logger.warning(f"Invalid sensor data length (dict): {len(sensor_data)} (expected 66). Data not saved.")
+                return
+
             fieldnames = ['timestamp'] + list(sensor_data.keys())
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 
-            # Write header if file is new
             if not file_exists:
                 writer.writeheader()
 
-            # Write data row with timestamp
             row_data = sensor_data.copy()
             row_data['timestamp'] = timestamp
             writer.writerow(row_data)
-            
-            #REPORT: increment every patrol event and update csv metrics
+
             increment("record_triggers_today")
-            update_csv_metrics()        
-
-        elif isinstance(sensor_data, list):
-            writer = csv.writer(csvfile)
-
-            # Write header if file is new
-            if not file_exists:
-                writer.writerow(['timestamp'] + [f'value_{i}' for i in range(len(sensor_data))])
-
-            # Write data row with timestamp
-            writer.writerow([timestamp] + sensor_data)
-            
-            #REPORT: increment every patrol event and update csv metrics
-            increment("record_triggers_today")
-            update_csv_metrics()   
+            update_csv_metrics()
 
         else:
-            writer = csv.writer(csvfile)
-
-            # Write header if file is new
-            if not file_exists:
-                writer.writerow(['timestamp', 'value'])
-
-            # Write data row with timestamp
-            writer.writerow([timestamp, sensor_data])
-            
-            #REPORT: increment every patrol event and update csv metrics
-            increment("record_triggers_today")
-            update_csv_metrics()   
+            logger.warning(f"Unexpected sensor data format: {type(sensor_data)}. Data not saved.")
+  
 
 
 # -------- Main Execution ----------
