@@ -42,13 +42,14 @@
             <div class="bg-green-100 rounded shadow p-6">
                 <h2 class="text-2xl font-semibold mb-4 text-center">📈 Real-Time Metrics</h2>
                 <div id="metrics-display" class="grid grid-cols-2 gap-x-6 gap-y-3 text-lg text-gray-800">
-                    <p><strong>Smells Detected Today:</strong> <span id="record_triggers_today">-</span></p>
                     <p><strong>People Detected Today:</strong> <span id="people_detected_today">-</span></p>
                     <p><strong>Falls (Box):</strong> <span id="falls_box">-</span></p>
                     <p><strong>Falls (Pose):</strong> <span id="falls_pose">-</span></p>
                     <p><strong>Falls (Bottom):</strong> <span id="falls_bottom">-</span></p>
                     <p><strong>Falls (Full):</strong> <span id="falls_full">-</span></p>
                     <p><strong>Frames Processed:</strong> <span id="frames_processed">-</span></p>
+                    <p><strong>Smells Detected Today:</strong> <span id="record_triggers_today">-</span></p>
+                    <p><strong>Total Smells:</strong> <span id="total_csv_rows">-</span></p>
                 </div>
             </div>
 
@@ -175,13 +176,14 @@
         fetch('/metrics')
             .then(response => response.json())
             .then(data => {
-                document.getElementById('record_triggers_today').innerText = data.record_triggers_today;
                 document.getElementById('people_detected_today').innerText = data.people_detected_today;
                 document.getElementById('falls_box').innerText = data.falls_box;
                 document.getElementById('falls_pose').innerText = data.falls_pose;
                 document.getElementById('falls_bottom').innerText = data.falls_bottom;
                 document.getElementById('falls_full').innerText = data.falls_full;
                 document.getElementById('frames_processed').innerText = data.frames_processed;
+                document.getElementById('record_triggers_today').innerText = data.record_triggers_today;
+                document.getElementById('total_csv_rows').innerText = data.total_csv_rows;
             })
             .catch(error => console.error('Error fetching metrics:', error));
     }
