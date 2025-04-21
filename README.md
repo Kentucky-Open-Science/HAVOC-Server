@@ -140,16 +140,3 @@ python server.py
                       | - Metric dashboard |
                       +--------------------+
 ```
-
-
-## 🛠️ Todo Ideas (Future Improvements)
-- Add Deep SORT or ByteTrack for stronger person ID tracking
-- Create historical fall chart visualizations
-- Store daily report archive as HTML or JSON
-- Export fall events with timestamps to CSV
-- Add Slack/Discord webhook alerts for live fall events
-
----
-
-Let me know if you want this in Markdown, PDF, or as a webpage!
-
