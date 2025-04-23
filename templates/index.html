@@ -86,28 +86,43 @@
 <script>
     let sensorChart;
 
-    const windowSize = 5; // number of frames to keep
-    const sensorHistory = []; // each entry is an array of 64 values
+    const windowSize = 5;
+    const sensorHistory = [];
     const sensorDataLength = 66;
+    let baseline = null;
+
+    function computeBaseline(history) {
+        const baseline = Array(sensorDataLength).fill(0);
+        history.forEach(frame => {
+            frame.forEach((val, i) => baseline[i] += val);
+        });
+        return baseline.map(val => val / history.length);
+    }
 
     function normalizeUsingWindow(newFrame) {
         if (sensorHistory.length >= windowSize) {
-            sensorHistory.shift(); // remove oldest
+            sensorHistory.shift();
         }
         sensorHistory.push(newFrame);
 
-        // transpose: [ [val1, val2, ...], ... ] → channel-wise [ [], [], ..., [] ]
-        const channelValues = Array.from({ length: sensorDataLength }, (_, i) =>
-            sensorHistory.map(frame => frame[i])
-        );
+        if (sensorHistory.length < windowSize) {
+            // not enough data to compute baseline yet, return zeros temporarily
+            return Array(sensorDataLength).fill(0);
+        }
 
+        if (!baseline) {
+            baseline = computeBaseline(sensorHistory);
+        }
+
+        // normalize relative to baseline (percentage variation)
         return newFrame.map((val, i) => {
-            const min = Math.min(...channelValues[i]);
-            const max = Math.max(...channelValues[i]);
-            if (min === max) return 0;
-            return (val - min) / (max - min); // scale 0–1
+            if (baseline[i] === 0) return 0;
+            let normalizedVal = (val - baseline[i]) / baseline[i];  // percentage difference
+            normalizedVal = Math.max(-1, Math.min(normalizedVal, 1)); // clamp between -1 and 1
+            return (normalizedVal + 1) / 2;  // map from [-1,1] to [0,1] for visualization
         });
     }
+
 
     function updateStatus() {
         fetch('/status')
@@ -138,31 +153,28 @@
             type: 'bar',
             data: data,
             options: {
-                indexAxis: 'y', // Keep this to maintain horizontal bars
+                indexAxis: 'y',
                 responsive: true,
-                maintainAspectRatio: false, // Critical for filling the container
+                maintainAspectRatio: false,
                 scales: {
                     x: {
-                        beginAtZero: true
+                        min: 0,
+                        max: 1,
+                        ticks: { stepSize: 0.1 },
                     },
                     y: {
                         ticks: {
+                            autoSkip: false,
                             maxRotation: 0,
-                            minRotation: 0,
-                            autoSkip: false // Prevent skipping labels
+                            minRotation: 0
                         }
                     }
                 },
                 plugins: {
-                    legend: {
-                        display: false
-                    }
+                    legend: { display: false }
                 },
                 elements: {
                     bar: {
-                        borderWidth: 1,
-                        borderSkipped: false,
-                        // Use flex instead of fixed barThickness
                         barThickness: 'flex',
                         categoryPercentage: 0.95,
                         barPercentage: 0.9
@@ -170,6 +182,7 @@
                 }
             }
         };
+
 
 
         if (sensorChart) {
