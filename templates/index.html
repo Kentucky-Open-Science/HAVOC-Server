@@ -86,6 +86,28 @@
 <script>
     let sensorChart;
 
+    const windowSize = 30; // number of frames to keep
+    const sensorHistory = []; // each entry is an array of 64 values
+
+    function normalizeUsingWindow(newFrame) {
+        if (sensorHistory.length >= windowSize) {
+            sensorHistory.shift(); // remove oldest
+        }
+        sensorHistory.push(newFrame);
+
+        // transpose: [ [val1, val2, ...], ... ] → channel-wise [ [], [], ..., [] ]
+        const channelValues = Array.from({ length: 64 }, (_, i) =>
+            sensorHistory.map(frame => frame[i])
+        );
+
+        return newFrame.map((val, i) => {
+            const min = Math.min(...channelValues[i]);
+            const max = Math.max(...channelValues[i]);
+            if (min === max) return 0;
+            return (val - min) / (max - min); // scale 0–1
+        });
+    }
+
     function updateStatus() {
         fetch('/status')
             .then(response => response.json())
@@ -165,7 +187,10 @@
                 document.getElementById('sensor_timestamp').innerText = data.timestamp || "-";
                 if (data.data && Array.isArray(data.data)) {
                     const cleanedValues = data.data.map(v => parseFloat(v)).filter(v => !isNaN(v));
-                    createOrUpdateChart(cleanedValues);
+                    if (cleanedValues.length === 64) {
+                        const normalized = normalizeUsingWindow(cleanedValues);
+                        createOrUpdateChart(normalized);
+                    }
                 }
 
             })
