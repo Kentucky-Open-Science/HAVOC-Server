@@ -88,6 +88,7 @@
 
     const windowSize = 5; // number of frames to keep
     const sensorHistory = []; // each entry is an array of 64 values
+    const sensorDataLength = 66;
 
     function normalizeUsingWindow(newFrame) {
         if (sensorHistory.length >= windowSize) {
@@ -96,7 +97,7 @@
         sensorHistory.push(newFrame);
 
         // transpose: [ [val1, val2, ...], ... ] → channel-wise [ [], [], ..., [] ]
-        const channelValues = Array.from({ length: 64 }, (_, i) =>
+        const channelValues = Array.from({ length: sensorDataLength }, (_, i) =>
             sensorHistory.map(frame => frame[i])
         );
 
@@ -191,7 +192,7 @@
                     console.log("Cleaned Values Length:", cleanedValues.length, cleanedValues);
 
 
-                    if (cleanedValues.length === 66) {
+                    if (cleanedValues.length === sensorDataLength) {
                         const normalized = normalizeUsingWindow(cleanedValues);
                         createOrUpdateChart(normalized);
                     }
