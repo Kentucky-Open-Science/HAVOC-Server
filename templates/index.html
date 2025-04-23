@@ -187,6 +187,10 @@
                 document.getElementById('sensor_timestamp').innerText = data.timestamp || "-";
                 if (data.data && Array.isArray(data.data)) {
                     const cleanedValues = data.data.map(v => parseFloat(v)).filter(v => !isNaN(v));
+
+                    console.log("Cleaned Values Length:", cleanedValues.length, cleanedValues);
+
+
                     if (cleanedValues.length === 64) {
                         const normalized = normalizeUsingWindow(cleanedValues);
                         createOrUpdateChart(normalized);
