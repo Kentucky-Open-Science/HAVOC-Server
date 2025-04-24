@@ -347,7 +347,6 @@ def trigger_report():
 
 @flask_app.route('/metrics', methods=['GET'])
 def get_metrics():
-    update_csv_metrics()
     return jsonify(metrics)
 
 def gen_frames():
@@ -577,6 +576,10 @@ if __name__ == "__main__":
         daemon=True
     )
     flask_thread.start()
+    
+    # Initial metrics update on startup
+    update_csv_metrics()    
+
 
     async def aiohttp_main():
         runner = web.AppRunner(app)
