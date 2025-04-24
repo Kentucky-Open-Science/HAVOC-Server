@@ -45,7 +45,7 @@ duplicate_threshold = 5
 freeze_threshold = 5.0
 last_frame_time = "N/A"
 last_should_record = False
-
+vision_mode = {"glasses": False, "last_toggle": 0}
 
 
 # Load offline placeholder image
