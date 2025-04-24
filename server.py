@@ -347,6 +347,7 @@ def trigger_report():
 
 @flask_app.route('/metrics', methods=['GET'])
 def get_metrics():
+    update_csv_metrics()
     return jsonify(metrics)
 
 def gen_frames():
