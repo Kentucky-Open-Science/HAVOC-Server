@@ -360,76 +360,42 @@ def gen_frames():
 
     last_state = None
     last_state_change_time = time.time()
-    
     last_person_count = 0
     last_person_increment_time = 0
-    fall_cooldown = .5  # seconds
-    person_cooldown = .5  # seconds
-    fall_persistence_time = 1.0  # seconds to hold last 'fallen' state active
+    fall_cooldown = .5
+    person_cooldown = .5
+    fall_persistence_time = 1.0
 
+    prev_falls = {"box": False, "pose": False, "bottom": False, "full": False}
+    last_fall_times = {"box": 0, "pose": 0, "bottom": 0, "full": 0}
+    last_seen_fallen = {"box": 0, "pose": 0, "bottom": 0, "full": 0}
 
-    prev_falls = {
-    "box": False,
-    "pose": False,
-    "bottom": False,
-    "full": False
-    }
-    
-    last_fall_times = {
-    "box": 0,
-    "pose": 0,
-    "bottom": 0,
-    "full": 0
-    }
-    
-    last_seen_fallen = {
-    "box": 0,
-    "pose": 0,
-    "bottom": 0,
-    "full": 0
-}
-    
     while True:
         time.sleep(0.02)
         frame = frame_holder.get('frame', offline_bytes)
 
-        # Determine the stream state
         current_state = "live"
         if isinstance(frame, bytes) or frame is None:
             current_state = "frozen"
         elif freeze_detected_time and (
             duplicate_frame_count > duplicate_threshold or 
-            time.time() - freeze_detected_time > freeze_threshold
-        ):
+            time.time() - freeze_detected_time > freeze_threshold):
             current_state = "offline"
 
-        # Track time spent in the current state
         if current_state != last_state:
             if last_state is not None:
                 elapsed = int(time.time() - last_state_change_time)
-                if last_state == "live":
-                    add_time("stream_live_seconds", elapsed)
-                elif last_state == "frozen":
-                    add_time("stream_frozen_seconds", elapsed)
-                elif last_state == "offline":
-                    add_time("stream_offline_seconds", elapsed)
-
-            # Count new state events
-            if current_state == "frozen":
-                increment("stream_frozen_count")
-            elif current_state == "offline":
-                increment("stream_offline_count")
-
+                add_time(f"stream_{last_state}_seconds", elapsed)
+            if current_state in ["frozen", "offline"]:
+                increment(f"stream_{current_state}_count")
             last_state = current_state
             last_state_change_time = time.time()
         else:
-            # Accumulate time every second (approximate)
             elapsed = int(time.time() - last_state_change_time)
             if elapsed >= 1:
                 add_time(f"stream_{current_state}_seconds", elapsed)
                 last_state_change_time = time.time()
 
-        # ====== Frame Processing ======
         if isinstance(frame, bytes):
             frame_bytes = frame
             if last_pts is not None:
@@ -438,68 +404,54 @@ def gen_frames():
             frame_bytes = offline_bytes
         else:
             if last_pts is None or frame.pts != last_pts:
-                
+                last_pts = frame.pts
+                last_frame_time = datetime.now().strftime('%H:%M:%S')
+                freeze_detected_time = None
+                duplicate_frame_count = 0
+                img = frame.to_ndarray(format="bgr24")
+
                 if vision_mode['glasses']:
-                    grid_img = fall_detector.draw_glasses_mustache(cv2.resize(img, (640, 480)))
+                    grid_img = fall_detector.draw_glasses_mustache(cv2.resize(img.copy(), (640, 480)))
                     if time.time() - vision_mode['last_toggle'] > 30:
                         vision_mode['glasses'] = False
                 else:
-                    last_pts = frame.pts
-                    last_frame_time = datetime.now().strftime('%H:%M:%S')
-                    freeze_detected_time = None
-                    duplicate_frame_count = 0
-                    img = frame.to_ndarray(format="bgr24")
-
                     height, width = img.shape[:2]
                     half_w, half_h = width // 2, height // 2
 
-                    # Get processed images
                     box_img, box_fallen, person_count, unique_fallers = fall_detector.test_process_frame_box(cv2.resize(img.copy(), (half_w, half_h)))
                     pose_img, pose_fallen = fall_detector.test_process_frame_pose_fall(cv2.resize(img.copy(), (half_w, half_h)))
                     bottom_img, bottom_fallen = fall_detector.bottom_frac_fall_detection(cv2.resize(img.copy(), (half_w, half_h)))
                     combined_img, combined_fallen = fall_detector.combined_frame(cv2.resize(img.copy(), (half_w, half_h)))
-                    
-                    #REPORT: increment person detected count 
-                    now = time.time()
 
-                    # Person count increased → increment people_detected_today (with existing cooldown)
+                    now = time.time()
                     if person_count > last_person_count and now - last_person_increment_time > person_cooldown:
                         increment("people_detected_today")
                         last_person_increment_time = now
-
                     last_person_count = person_count
 
-                    # Fall triggered → increment falls_box (already has per-person logic inside)
                     if box_fallen and now - last_fall_times["box"] > fall_cooldown:
                         increment("falls_box")
                         last_fall_times["box"] = now
-
                     if pose_fallen and not prev_falls["pose"] and now - last_fall_times["pose"] > fall_cooldown:
                         increment("falls_pose")
                         last_fall_times["pose"] = now
-
                     if bottom_fallen and not prev_falls["bottom"] and now - last_fall_times["bottom"] > fall_cooldown:
                         increment("falls_bottom")
                         last_fall_times["bottom"] = now
-
                     if combined_fallen and not prev_falls["full"] and now - last_fall_times["full"] > fall_cooldown:
                         increment("falls_full")
                         last_fall_times["full"] = now
 
-
-                    # Update state tracking
                     prev_falls["box"] = box_fallen
                     prev_falls["pose"] = pose_fallen
                     prev_falls["bottom"] = bottom_fallen
                     prev_falls["full"] = combined_fallen
 
-                    # Combine into 2x2 grid
                     top_row = np.hstack((box_img, pose_img))
                     bottom_row = np.hstack((bottom_img, combined_img))
                     grid_img = np.vstack((top_row, bottom_row))
-                
-                # === REPORT: increment for every processed frame
-                increment("frames_processed")       
+
+                increment("frames_processed")
 
                 if recording and video_writer is not None:
                     resized_frame = cv2.resize(grid_img, (640, 480))
@@ -512,15 +464,14 @@ def gen_frames():
                     freeze_detected_time = time.time()
                 elif duplicate_frame_count > duplicate_threshold or time.time() - freeze_detected_time > freeze_threshold:
                     frame_bytes = offline_bytes
-                    logger.info(f"Stream frozen, switching to placeholder after {duplicate_frame_count} duplicates, "
-                                f"time elapsed={time.time() - freeze_detected_time:.2f}s")
+                    logger.info(f"Stream frozen, switching to placeholder after {duplicate_frame_count} duplicates, time elapsed={time.time() - freeze_detected_time:.2f}s")
                 else:
                     duplicate_frame_count += 1
                     if duplicate_frame_count == duplicate_threshold:
                         logger.warning(f"Duplicate frames detected, count={duplicate_frame_count}")
 
-        yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+        yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+
 
 
 import csv
