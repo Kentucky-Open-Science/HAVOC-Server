@@ -44,6 +44,7 @@ duplicate_frame_count = 0
 duplicate_threshold = 5
 freeze_threshold = 5.0
 last_frame_time = "N/A"
+last_should_record = False
 
 
 
@@ -116,9 +117,6 @@ async def create_peer_connection():
     @peer.on("datachannel")
     def on_datachannel(channel):
         logger.info(f"📡 DataChannel received: {channel.label}")
-
-        # Global or higher-scope variable to keep track of previous state
-        last_should_record = False
 
         @channel.on("message")
         def on_message(message):
