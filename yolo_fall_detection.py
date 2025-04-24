@@ -202,8 +202,6 @@ class FallDetector:
 
         return img, fallen
 
-
-
     def combined_frame(self, img):
         fallen = False
 
@@ -221,6 +219,49 @@ class FallDetector:
                         cv2.FONT_HERSHEY_SIMPLEX, 0.8, self.Red, 3)
 
         return combined_img, fallen
+
+    def draw_glasses_mustache(self, img):
+        BLACK = (0, 0, 0)
+        results = self.model(img, stream=True, conf=self.conf_threshold, verbose=False)
+
+        for r in results:
+            if hasattr(r, "keypoints"):
+                for keypoints in r.keypoints.xy:
+                    keypoints_list = keypoints.cpu().numpy().tolist()
+
+                    if all(kp != [0.0, 0.0] for kp in [keypoints_list[0], keypoints_list[1], keypoints_list[2], keypoints_list[3], keypoints_list[4]]):
+                        nose = tuple(map(int, keypoints_list[0]))
+                        left_eye = tuple(map(int, keypoints_list[1]))
+                        right_eye = tuple(map(int, keypoints_list[2]))
+                        left_ear = tuple(map(int, keypoints_list[3]))
+                        right_ear = tuple(map(int, keypoints_list[4]))
+
+                        eye_distance = math.sqrt((right_eye[0] - left_eye[0]) ** 2 + (right_eye[1] - left_eye[1]) ** 2)
+                        lens_radius = int(eye_distance * 0.4)
+                        frame_size = int(lens_radius / 4)
+
+                        cv2.circle(img, left_eye, lens_radius, BLACK, -1)
+                        cv2.circle(img, right_eye, lens_radius, BLACK, -1)
+
+                        left_frame_start = (left_eye[0] + lens_radius, left_eye[1])
+                        left_frame_end = (left_ear[0], left_ear[1] - lens_radius)
+                        right_frame_start = (right_eye[0] - lens_radius, right_eye[1])
+                        right_frame_end = (right_ear[0], right_ear[1] - lens_radius)
+
+                        cv2.line(img, left_frame_start, left_frame_end, BLACK, frame_size)
+                        cv2.line(img, right_frame_start, right_frame_end, BLACK, frame_size)
+                        cv2.line(img, left_frame_start, right_frame_start, BLACK, frame_size)
+
+                        mustache_length = int(eye_distance * 0.48)
+                        mustache_offset_y = int(eye_distance * 0.32)
+                        mustache_y = nose[1] + int(mustache_offset_y * 1.2)
+
+                        cv2.line(img, (nose[0], mustache_y), (nose[0] - mustache_length, mustache_y + int(mustache_length * 0.3)), BLACK, frame_size)
+                        cv2.line(img, (nose[0], mustache_y), (nose[0] + mustache_length, mustache_y + int(mustache_length * 0.3)), BLACK, frame_size)
+                    else:
+                        cv2.putText(img, "Missing Face Keypoints", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 0, 0), 1)
+
+        return img
 
 
     def reset(self):

@@ -30,6 +30,10 @@
         <!-- Left: Video Feed -->
         <div class="flex-[2] bg-white rounded shadow p-6">
             <img src="{{ url_for('video_feed') }}" alt="Video Stream" class="w-full h-auto rounded">
+            <button id="toggle-mode"
+                class="absolute top-4 right-4 bg-blue-500 text-white px-4 py-2 rounded shadow hover:bg-blue-600">
+                Fall Detection
+            </button>
             <div class="mt-4 text-center">
                 <p class="text-xl">Stream: <span id="stream_status">{{ stream_status }}</span></p>
                 <p class="text-lg text-gray-600">Last Frame: <span id="last_frame_time">{{ last_frame_time }}</span></p>
@@ -55,7 +59,8 @@
 
             <!-- Sensor Chart -->
             <div class="bg-blue-100 rounded shadow p-6 h-full flex flex-col">
-                <h2 class="text-2xl font-semibold text-center">Smell Sensor Fluctuations Based on Moving Average (100x)</h2>
+                <h2 class="text-2xl font-semibold text-center">Smell Sensor Fluctuations Based on Moving Average (100x)
+                </h2>
                 <p class="text-lg text-gray-600 text-center mb-4">Timestamp: <span id="sensor_timestamp">-</span></p>
                 <div class="flex-grow overflow-hidden">
                     <canvas id="sensorChart" class="w-full h-full"></canvas>
@@ -90,6 +95,33 @@
     const sensorDataLength = 66;
     let baseline = null;
     const sensitivityFactor = 100;  // <-- Adjust sensitivity here
+    let glassesMode = false;
+    let toggleTimeout;
+
+    document.getElementById('toggle-mode').onclick = () => {
+        glassesMode = !glassesMode;
+        const button = document.getElementById('toggle-mode');
+        button.textContent = glassesMode ? '🕶️ Glasses Mode' : 'Fall Detection';
+
+        fetch('/toggle-vision-mode', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ glasses: glassesMode })
+        });
+
+        if (glassesMode) {
+            clearTimeout(toggleTimeout);
+            toggleTimeout = setTimeout(() => {
+                glassesMode = false;
+                document.getElementById('toggle-mode').textContent = 'Fall Detection';
+                fetch('/toggle-vision-mode', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ glasses: false })
+                });
+            }, 30000);
+        }
+    };
 
     function computeBaseline(history) {
         const baseline = Array(sensorDataLength).fill(0);

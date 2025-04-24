@@ -231,6 +231,14 @@ def index():
             stream_status = "Live"
     return render_template('index.html', stream_status=stream_status, last_frame_time=last_frame_time)
 
+@flask_app.route('/toggle-vision-mode', methods=['POST'])
+def toggle_vision_mode():
+    global vision_mode
+    data = request.get_json()
+    vision_mode['glasses'] = data.get('glasses', False)
+    vision_mode['last_toggle'] = time.time()
+    return jsonify({"status": "ok", "glasses": vision_mode['glasses']})
+
 @flask_app.route('/status')
 def get_status():
     frame = frame_holder.get('frame', offline_bytes)
@@ -430,59 +438,65 @@ def gen_frames():
             frame_bytes = offline_bytes
         else:
             if last_pts is None or frame.pts != last_pts:
-                last_pts = frame.pts
-                last_frame_time = datetime.now().strftime('%H:%M:%S')
-                freeze_detected_time = None
-                duplicate_frame_count = 0
-                img = frame.to_ndarray(format="bgr24")
-
-                height, width = img.shape[:2]
-                half_w, half_h = width // 2, height // 2
-
-                # Get processed images
-                box_img, box_fallen, person_count, unique_fallers = fall_detector.test_process_frame_box(cv2.resize(img.copy(), (half_w, half_h)))
-                pose_img, pose_fallen = fall_detector.test_process_frame_pose_fall(cv2.resize(img.copy(), (half_w, half_h)))
-                bottom_img, bottom_fallen = fall_detector.bottom_frac_fall_detection(cv2.resize(img.copy(), (half_w, half_h)))
-                combined_img, combined_fallen = fall_detector.combined_frame(cv2.resize(img.copy(), (half_w, half_h)))
                 
-                #REPORT: increment person detected count 
-                now = time.time()
+                if vision_mode['glasses']:
+                    grid_img = fall_detector.draw_glasses_mustache(cv2.resize(img, (640, 480)))
+                    if time.time() - vision_mode['last_toggle'] > 30:
+                        vision_mode['glasses'] = False
+                else:
+                    last_pts = frame.pts
+                    last_frame_time = datetime.now().strftime('%H:%M:%S')
+                    freeze_detected_time = None
+                    duplicate_frame_count = 0
+                    img = frame.to_ndarray(format="bgr24")
 
-                # Person count increased → increment people_detected_today (with existing cooldown)
-                if person_count > last_person_count and now - last_person_increment_time > person_cooldown:
-                    increment("people_detected_today")
-                    last_person_increment_time = now
+                    height, width = img.shape[:2]
+                    half_w, half_h = width // 2, height // 2
 
-                last_person_count = person_count
+                    # Get processed images
+                    box_img, box_fallen, person_count, unique_fallers = fall_detector.test_process_frame_box(cv2.resize(img.copy(), (half_w, half_h)))
+                    pose_img, pose_fallen = fall_detector.test_process_frame_pose_fall(cv2.resize(img.copy(), (half_w, half_h)))
+                    bottom_img, bottom_fallen = fall_detector.bottom_frac_fall_detection(cv2.resize(img.copy(), (half_w, half_h)))
+                    combined_img, combined_fallen = fall_detector.combined_frame(cv2.resize(img.copy(), (half_w, half_h)))
+                    
+                    #REPORT: increment person detected count 
+                    now = time.time()
 
-                # Fall triggered → increment falls_box (already has per-person logic inside)
-                if box_fallen and now - last_fall_times["box"] > fall_cooldown:
-                    increment("falls_box")
-                    last_fall_times["box"] = now
+                    # Person count increased → increment people_detected_today (with existing cooldown)
+                    if person_count > last_person_count and now - last_person_increment_time > person_cooldown:
+                        increment("people_detected_today")
+                        last_person_increment_time = now
 
-                if pose_fallen and not prev_falls["pose"] and now - last_fall_times["pose"] > fall_cooldown:
-                    increment("falls_pose")
-                    last_fall_times["pose"] = now
+                    last_person_count = person_count
 
-                if bottom_fallen and not prev_falls["bottom"] and now - last_fall_times["bottom"] > fall_cooldown:
-                    increment("falls_bottom")
-                    last_fall_times["bottom"] = now
+                    # Fall triggered → increment falls_box (already has per-person logic inside)
+                    if box_fallen and now - last_fall_times["box"] > fall_cooldown:
+                        increment("falls_box")
+                        last_fall_times["box"] = now
 
-                if combined_fallen and not prev_falls["full"] and now - last_fall_times["full"] > fall_cooldown:
-                    increment("falls_full")
-                    last_fall_times["full"] = now
+                    if pose_fallen and not prev_falls["pose"] and now - last_fall_times["pose"] > fall_cooldown:
+                        increment("falls_pose")
+                        last_fall_times["pose"] = now
+
+                    if bottom_fallen and not prev_falls["bottom"] and now - last_fall_times["bottom"] > fall_cooldown:
+                        increment("falls_bottom")
+                        last_fall_times["bottom"] = now
+
+                    if combined_fallen and not prev_falls["full"] and now - last_fall_times["full"] > fall_cooldown:
+                        increment("falls_full")
+                        last_fall_times["full"] = now
 
 
-                # Update state tracking
-                prev_falls["box"] = box_fallen
-                prev_falls["pose"] = pose_fallen
-                prev_falls["bottom"] = bottom_fallen
-                prev_falls["full"] = combined_fallen
+                    # Update state tracking
+                    prev_falls["box"] = box_fallen
+                    prev_falls["pose"] = pose_fallen
+                    prev_falls["bottom"] = bottom_fallen
+                    prev_falls["full"] = combined_fallen
 
-                # Combine into 2x2 grid
-                top_row = np.hstack((box_img, pose_img))
-                bottom_row = np.hstack((bottom_img, combined_img))
-                grid_img = np.vstack((top_row, bottom_row))
+                    # Combine into 2x2 grid
+                    top_row = np.hstack((box_img, pose_img))
+                    bottom_row = np.hstack((bottom_img, combined_img))
+                    grid_img = np.vstack((top_row, bottom_row))
                 
                 # === REPORT: increment for every processed frame
                 increment("frames_processed")       
