@@ -44,6 +44,7 @@ duplicate_frame_count = 0
 duplicate_threshold = 5
 freeze_threshold = 5.0
 last_frame_time = "N/A"
+last_should_record = False
 
 
 
@@ -119,27 +120,36 @@ async def create_peer_connection():
 
         @channel.on("message")
         def on_message(message):
+            global last_should_record  # Reference the outer variable
+
             try:
                 # Assume JSON string with 'sensor_data' and 'should_record' flag
                 data = json.loads(message)
                 sensor_data = data.get('values')
-                should_record = data.get('should_record', False)  # Default to False if not provided, temi stream provides should_record flag for when he is patroling
-                # should_record = True  # Force recording for testing
-                
+                should_record = data.get('should_record', False)
+
                 timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                
+
                 latest_sensor_data['data'] = sensor_data
                 latest_sensor_data['timestamp'] = timestamp
                 latest_sensor_data['should_record'] = should_record
 
                 logger.info(f"[{timestamp}] DataChannel sensor data: {sensor_data}, Record flag: {should_record}")
-                
+
+                # Check if state changed from False to True
+                if not last_should_record and should_record:
+                    increment("record_triggers_today")
+
                 # Record to CSV if flag is True
                 if should_record:
                     record_sensor_data_to_csv(sensor_data, timestamp)
-                
+
+                # Update the last_should_record value for the next message
+                last_should_record = should_record
+
             except Exception as e:
                 logger.error(f"Failed to process DataChannel message: {e}")
+
 
     pcs.add(peer)
     
@@ -519,50 +529,42 @@ def record_sensor_data_to_csv(sensor_data, timestamp):
     file_exists = os.path.isfile(csv_path)
 
     with open(csv_path, 'a', newline='') as csvfile:
-        if isinstance(sensor_data, dict):
+        if isinstance(sensor_data, list):
+            if len(sensor_data) != 66:
+                logger.warning(f"Invalid sensor data length: {len(sensor_data)} (expected 66). Data not saved.")
+                return  # Skip saving invalid data
+
+            writer = csv.writer(csvfile)
+
+            if not file_exists:
+                writer.writerow(['timestamp'] + [f'value_{i}' for i in range(66)])
+
+            writer.writerow([timestamp] + sensor_data)
+
+            # increment("new_csv_rows_today")
+            update_csv_metrics()
+
+        elif isinstance(sensor_data, dict):
+            if len(sensor_data) != 66:
+                logger.warning(f"Invalid sensor data length (dict): {len(sensor_data)} (expected 66). Data not saved.")
+                return  # Skip saving invalid data
+
             fieldnames = ['timestamp'] + list(sensor_data.keys())
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 
-            # Write header if file is new
             if not file_exists:
                 writer.writeheader()
 
-            # Write data row with timestamp
             row_data = sensor_data.copy()
             row_data['timestamp'] = timestamp
             writer.writerow(row_data)
-            
-            #REPORT: increment every patrol event and update csv metrics
-            increment("record_triggers_today")
-            update_csv_metrics()        
 
-        elif isinstance(sensor_data, list):
-            writer = csv.writer(csvfile)
-
-            # Write header if file is new
-            if not file_exists:
-                writer.writerow(['timestamp'] + [f'value_{i}' for i in range(len(sensor_data))])
-
-            # Write data row with timestamp
-            writer.writerow([timestamp] + sensor_data)
-            
-            #REPORT: increment every patrol event and update csv metrics
-            increment("record_triggers_today")
-            update_csv_metrics()   
+            # increment("new_csv_rows_today")
+            update_csv_metrics()
 
         else:
-            writer = csv.writer(csvfile)
-
-            # Write header if file is new
-            if not file_exists:
-                writer.writerow(['timestamp', 'value'])
-
-            # Write data row with timestamp
-            writer.writerow([timestamp, sensor_data])
-            
-            #REPORT: increment every patrol event and update csv metrics
-            increment("record_triggers_today")
-            update_csv_metrics()   
+            logger.warning(f"Unexpected sensor data format: {type(sensor_data)}. Data not saved.")
+  
 
 
 # -------- Main Execution ----------
@@ -572,6 +574,10 @@ if __name__ == "__main__":
         daemon=True
     )
     flask_thread.start()
+    
+    # Initial metrics update on startup
+    update_csv_metrics()    
+
 
     async def aiohttp_main():
         runner = web.AppRunner(app)
