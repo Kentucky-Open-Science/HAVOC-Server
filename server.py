@@ -547,7 +547,7 @@ def record_sensor_data_to_csv(sensor_data, timestamp):
         elif isinstance(sensor_data, dict):
             if len(sensor_data) != 66:
                 logger.warning(f"Invalid sensor data length (dict): {len(sensor_data)} (expected 66). Data not saved.")
-                return
+                return  # Skip saving invalid data
 
             fieldnames = ['timestamp'] + list(sensor_data.keys())
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
