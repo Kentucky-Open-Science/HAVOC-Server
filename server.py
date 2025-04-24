@@ -543,7 +543,7 @@ def record_sensor_data_to_csv(sensor_data, timestamp):
 
             writer.writerow([timestamp] + sensor_data)
 
-            increment("new_csv_rows_today")
+            # increment("new_csv_rows_today")
             update_csv_metrics()
 
         elif isinstance(sensor_data, dict):
@@ -561,7 +561,7 @@ def record_sensor_data_to_csv(sensor_data, timestamp):
             row_data['timestamp'] = timestamp
             writer.writerow(row_data)
 
-            increment("new_csv_rows_today")
+            # increment("new_csv_rows_today")
             update_csv_metrics()
 
         else:
