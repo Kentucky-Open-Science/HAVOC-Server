@@ -117,29 +117,41 @@ async def create_peer_connection():
     def on_datachannel(channel):
         logger.info(f"📡 DataChannel received: {channel.label}")
 
+        # Global or higher-scope variable to keep track of previous state
+        last_should_record = False
+
         @channel.on("message")
         def on_message(message):
+            global last_should_record  # Reference the outer variable
+
             try:
                 # Assume JSON string with 'sensor_data' and 'should_record' flag
                 data = json.loads(message)
                 sensor_data = data.get('values')
-                should_record = data.get('should_record', False)  # Default to False if not provided, temi stream provides should_record flag for when he is patroling
-                # should_record = True  # Force recording for testing
-                
+                should_record = data.get('should_record', False)
+
                 timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                
+
                 latest_sensor_data['data'] = sensor_data
                 latest_sensor_data['timestamp'] = timestamp
                 latest_sensor_data['should_record'] = should_record
 
                 logger.info(f"[{timestamp}] DataChannel sensor data: {sensor_data}, Record flag: {should_record}")
-                
+
+                # Check if state changed from False to True
+                if not last_should_record and should_record:
+                    increment("record_triggers_today")
+
                 # Record to CSV if flag is True
                 if should_record:
                     record_sensor_data_to_csv(sensor_data, timestamp)
-                
+
+                # Update the last_should_record value for the next message
+                last_should_record = should_record
+
             except Exception as e:
                 logger.error(f"Failed to process DataChannel message: {e}")
+
 
     pcs.add(peer)
     
@@ -531,7 +543,7 @@ def record_sensor_data_to_csv(sensor_data, timestamp):
 
             writer.writerow([timestamp] + sensor_data)
 
-            increment("record_triggers_today")
+            increment("new_csv_rows_today")
             update_csv_metrics()
 
         elif isinstance(sensor_data, dict):
@@ -549,7 +561,7 @@ def record_sensor_data_to_csv(sensor_data, timestamp):
             row_data['timestamp'] = timestamp
             writer.writerow(row_data)
 
-            increment("record_triggers_today")
+            increment("new_csv_rows_today")
             update_csv_metrics()
 
         else:
