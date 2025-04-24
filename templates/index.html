@@ -30,10 +30,10 @@
         <!-- Left: Video Feed -->
         <div class="flex-[2] bg-white rounded shadow p-6">
             <img src="{{ url_for('video_feed') }}" alt="Video Stream" class="w-full h-auto rounded">
-            <button id="toggle-mode"
-                class="absolute top-4 right-4 bg-blue-500 text-white px-4 py-2 rounded shadow hover:bg-blue-600">
+            <button id="toggle-mode" class="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-blue-500 text-white px-4 py-2 rounded shadow hover:bg-blue-600">
                 🕶️ Glasses
             </button>
+            
             <div class="mt-4 text-center">
                 <p class="text-xl">Stream: <span id="stream_status">{{ stream_status }}</span></p>
                 <p class="text-lg text-gray-600">Last Frame: <span id="last_frame_time">{{ last_frame_time }}</span></p>
