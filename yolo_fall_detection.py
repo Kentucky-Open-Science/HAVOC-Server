@@ -229,7 +229,7 @@ class FallDetector:
                 for keypoints in r.keypoints.xy:
                     keypoints_list = keypoints.cpu().numpy().tolist()
 
-                    if all(kp != [0.0, 0.0] for kp in [keypoints_list[0], keypoints_list[1], keypoints_list[2], keypoints_list[3], keypoints_list[4]]):
+                    if len(keypoints_list) >= 5 and all(kp != [0.0, 0.0] for kp in keypoints_list[:5]):
                         nose = tuple(map(int, keypoints_list[0]))
                         left_eye = tuple(map(int, keypoints_list[1]))
                         right_eye = tuple(map(int, keypoints_list[2]))
