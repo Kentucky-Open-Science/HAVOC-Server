@@ -32,7 +32,7 @@
             <img src="{{ url_for('video_feed') }}" alt="Video Stream" class="w-full h-auto rounded">
             <button id="toggle-mode"
                 class="absolute top-4 right-4 bg-blue-500 text-white px-4 py-2 rounded shadow hover:bg-blue-600">
-                Fall Detection
+                🕶️ Glasses
             </button>
             <div class="mt-4 text-center">
                 <p class="text-xl">Stream: <span id="stream_status">{{ stream_status }}</span></p>
@@ -98,10 +98,14 @@
     let glassesMode = false;
     let toggleTimeout;
 
+    function updateToggleButton() {
+        const button = document.getElementById('toggle-mode');
+        button.textContent = glassesMode ? 'Fall Detection' : '🕶️ Glasses';
+    }
+
     document.getElementById('toggle-mode').onclick = () => {
         glassesMode = !glassesMode;
-        const button = document.getElementById('toggle-mode');
-        button.textContent = glassesMode ? '🕶️ Glasses Mode' : 'Fall Detection';
+        updateToggleButton();
 
         fetch('/toggle-vision-mode', {
             method: 'POST',
@@ -113,7 +117,7 @@
             clearTimeout(toggleTimeout);
             toggleTimeout = setTimeout(() => {
                 glassesMode = false;
-                document.getElementById('toggle-mode').textContent = 'Fall Detection';
+                updateToggleButton();
                 fetch('/toggle-vision-mode', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -138,7 +142,7 @@
         sensorHistory.push(newFrame);
 
         if (sensorHistory.length < windowSize) {
-            // not enough data yet
+            // Not enough data yet
             return Array(sensorDataLength).fill(0);
         }
 
@@ -149,11 +153,11 @@
         return newFrame.map((val, i) => {
             if (baseline[i] === 0) return 0;
             let normalizedVal = (val - baseline[i]) / baseline[i];
-            normalizedVal *= sensitivityFactor; // scale for visibility
-            normalizedVal = Math.max(-1, Math.min(normalizedVal, 1)); // clamp between [-1, 1]
-            return normalizedVal;
+            normalizedVal *= sensitivityFactor;
+            return Math.max(-1, Math.min(normalizedVal, 1));
         });
     }
+
 
     function updateStatus() {
         fetch('/status')
@@ -299,6 +303,7 @@
     updateMetrics();
     updateStatus();
     updateSensorData();
+    updateToggleButton();
 </script>
 </body>
 
