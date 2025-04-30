@@ -140,8 +140,3 @@ python server.py
                       | - Metric dashboard |
                       +--------------------+
 ```
-
-## TODO:
-- [ ] create a test suite that runs at the time of the daily report that checks the data quality o the sensor csv, add these metrics to the report
-- [ ] `increment(record_trigger)` should really be `num_rows_today`, `record_triggers` should only be incremented when `should_record ` goes from false to true, only about 8 times a day (during work hours, once an hour).
-- [ ] time recording does not seem to work properly, for one the logic on live vs frozen vs offline seems off, then incrementing each one then putting that on a time scale is way off, updates show 30+ hours of different time tyes sometime.
