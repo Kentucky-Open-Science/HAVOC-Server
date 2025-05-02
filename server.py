@@ -554,8 +554,10 @@ if __name__ == "__main__":
             await asyncio.sleep(3600)
             
             
+    from training_pipeline import schedule_embedding_pipeline
     from daily_reports import schedule_daily_report
-    schedule_daily_report()
 
+    schedule_embedding_pipeline()  # run first
+    schedule_daily_report()        # then run report after embeddings are ready
 
     asyncio.run(aiohttp_main())

@@ -6,3 +6,5 @@ numpy
 ultralytics
 python-dotenv
 flask-cors
+pandas
+scikit-learn

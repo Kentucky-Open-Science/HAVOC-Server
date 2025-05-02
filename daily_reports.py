@@ -3,6 +3,7 @@ import csv
 import smtplib
 import shutil
 import threading
+import json
 from datetime import datetime, timedelta
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -15,6 +16,8 @@ load_dotenv()
 # === CONFIGURATION ===
 SENSOR_CSV_PATH = "Temi_Sensor_Data/sensor_data_master.csv"
 VIDEO_DIR = "Temi_VODs"
+EMBEDDINGS_DIR = "embeddings"
+VISUALS_DIR = "visualizations"
 EMAIL_SENDER = os.getenv("TEMI_EMAIL_SENDER")
 EMAIL_PASSWORD = os.getenv("TEMI_EMAIL_PASSWORD")
 EMAIL_RECIPIENTS = os.getenv("TEMI_EMAIL_RECIPIENTS", "").split(",")
@@ -40,7 +43,7 @@ metrics = {
     "http_api_calls": 0
 }
 
-# === TRACKER UPDATE FUNCTIONS (called from server.py) ===
+# === TRACKER UPDATE FUNCTIONS ===
 def increment(key):
     if key in metrics:
         metrics[key] += 1
@@ -97,7 +100,6 @@ def get_video_metrics():
                 count_total += 1
                 total_size += os.path.getsize(path)
 
-                # Check if the filename has today's date
                 if f.startswith("recorded_video_"):
                     parts = f.replace("recorded_video_", "").split("_")
                     if parts and parts[0] == today_str:
@@ -113,12 +115,37 @@ def format_seconds(seconds):
     secs = seconds % 60
     return f"{hours:02}:{minutes:02}:{secs:02}"
 
-
 # === EMAIL REPORT GENERATION ===
 def generate_html_report():
     update_csv_metrics()
     count_total, count_today, total_size = get_video_metrics()
     disk_free = get_disk_space()
+
+    # Load embedding metrics and image
+    today_str = datetime.now().date().isoformat()
+    embedding_img_path = f"tsne_{today_str}.png"
+    embedding_img_html = "<p style='color:red;'>❌ No embedding visualization found for today.</p>"
+    embedding_metrics_html = "<p style='color:red;'>❌ No embedding metrics available for today.</p>"
+
+    vis_path = os.path.join(VISUALS_DIR, embedding_img_path)
+    metrics_path = os.path.join(EMBEDDINGS_DIR, f"{today_str}.json")
+
+    if os.path.exists(vis_path):
+        with open(vis_path, "rb") as img_file:
+            encoded_img = f"cid:{embedding_img_path}"
+            embedding_img_html = f"<img src='{encoded_img}' alt='Embedding Visualization' width='600'/><br/>"
+
+    if os.path.exists(metrics_path):
+        with open(metrics_path, "r") as f:
+            embedding_data = json.load(f)
+            embedding_metrics_html = f"""
+            <ul>
+                <li><strong>Ambient Rows:</strong> {embedding_data.get('ambient_rows', '?')}</li>
+                <li><strong>Target Rows:</strong> {embedding_data.get('target_rows', '?')}</li>
+                <li><strong>Silhouette Score:</strong> {embedding_data.get('silhouette_score', '?')}</li>
+                <li><strong>Training Loss:</strong> {embedding_data.get('loss', '?')}</li>
+            </ul>
+            """
 
     html = f"""
     <html>
@@ -151,7 +178,6 @@ def generate_html_report():
             <li><strong>Offline time:</strong> {format_seconds(metrics['stream_offline_seconds'])}</li>
         </ul>
 
-
         <h3>🌐 API Activity</h3>
         <ul>
             <li><strong>WebRTC connections:</strong> {metrics['webrtc_connections']}</li>
@@ -167,6 +193,9 @@ def generate_html_report():
             <li><strong>Disk space remaining:</strong> {disk_free} GB</li>
         </ul>
 
+        <h3>🧠 Embedding Model Summary</h3>
+        {embedding_img_html}
+        {embedding_metrics_html}
 
         <p style='color:#95a5a6;'>Report generated automatically by Temi server at {datetime.now().strftime('%H:%M:%S')}.</p>
     </body>
@@ -174,6 +203,7 @@ def generate_html_report():
     """
     return html
 
+# === EMAIL DISPATCH ===
 def send_email_report():
     subject = f"Temi Server Report - {datetime.now().strftime('%Y-%m-%d')}"
     html = generate_html_report()
