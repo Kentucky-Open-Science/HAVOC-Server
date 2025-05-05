@@ -24,8 +24,7 @@ from daily_reports import (
     update_csv_metrics,
     metrics,
 )
-
-
+from training_pipeline import schedule_embedding_pipeline, run_embedding_pipeline
 from yolo_fall_detection import FallDetector  # Import the FallDetector class
 
 # Set logging to INFO level
@@ -340,16 +339,20 @@ def stop_recording():
 
     return jsonify({'status': 'recording stopped'}), 200
 
-
 # === MANUAL TRIGGER ROUTE ===
 @flask_app.route("/send-report-now", methods=["GET"])
 def trigger_report():
+    print("🚀 Running embedding pipeline before report...")
+    run_embedding_pipeline()  # Run model training or fine-tuning
+
+    print("📧 Sending report email...")
     success = send_email_report()
-    
-    #REPORT: increment every api call
+
+    # REPORT: increment every API call
     increment("http_api_calls")
 
     return jsonify({"status": "sent" if success else "failed"})
+
 
 @flask_app.route('/metrics', methods=['GET'])
 def get_metrics():
@@ -553,9 +556,6 @@ if __name__ == "__main__":
         while True:
             await asyncio.sleep(3600)
             
-            
-    from training_pipeline import schedule_embedding_pipeline
-    from daily_reports import schedule_daily_report
 
     schedule_embedding_pipeline()  # run first
     schedule_daily_report()        # then run report after embeddings are ready

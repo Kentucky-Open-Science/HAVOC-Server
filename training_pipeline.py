@@ -12,6 +12,7 @@ from sklearn.manifold import TSNE
 from sklearn.metrics import silhouette_score
 from sklearn.preprocessing import StandardScaler
 from dotenv import load_dotenv
+from daily_reports import increment, metrics
 
 # === CONFIGURATION ===
 load_dotenv()
@@ -121,9 +122,9 @@ def run_embedding_pipeline(test_mode=False, skip_save=False):
         ambient_embeds = model.encoder(X_tensor).numpy()
         target_embeds = model.encoder(torch.tensor(target_scaled, dtype=torch.float32)).numpy()
 
-    date_str = today.isoformat()
+    today_str = datetime.now().date().isoformat()
     if not skip_save:
-        np.save(os.path.join(EMBEDDINGS_DIR, f"{date_str}.npy"), ambient_embeds)
+        np.save(os.path.join(EMBEDDINGS_DIR, f"{today_str}.npy"), ambient_embeds)
         if os.path.exists(MASTER_EMBEDDINGS_PATH):
             master_embeds = np.load(MASTER_EMBEDDINGS_PATH)
             master_embeds = np.concatenate([master_embeds, ambient_embeds], axis=0)
@@ -141,7 +142,7 @@ def run_embedding_pipeline(test_mode=False, skip_save=False):
         ix = [i for i, l in enumerate(labels) if l == label]
         plt.scatter(tsne_result[ix, 0], tsne_result[ix, 1], label=label, alpha=0.7)
     plt.legend()
-    plt.title(f"t-SNE Visualization: {date_str}")
+    plt.title(f"t-SNE Visualization: {today_str}")
 
     if test_mode:
         print("\n--- TEST MODE OUTPUT ---")
@@ -152,22 +153,26 @@ def run_embedding_pipeline(test_mode=False, skip_save=False):
         plt.show()
     else:
         if not skip_save:
-            plt.savefig(os.path.join(VISUALS_DIR, f"tsne_{date_str}.png"))
+            plt.savefig(os.path.join(VISUALS_DIR, f"tsne_{today_str}.png"))
         plt.close()
 
     silhouette = silhouette_score(combined_embeds, labels)
     if not skip_save:
         metadata = {
-            "date": date_str,
-            "ambient_rows": len(ambient_embeds),
-            "target_rows": len(target_embeds),
-            "silhouette_score": silhouette,
-            "loss": float(loss.item())
+            "date": str(today_str),
+            "ambient_rows": int(len(ambient_embeds)),
+            "target_rows": int(len(target_embeds)),
+            "silhouette_score": float(silhouette),  # force native float
+            "loss": float(loss.item())              # also force native float
         }
-        with open(os.path.join(EMBEDDINGS_DIR, f"{date_str}.json"), "w") as f:
-            json.dump(metadata, f, indent=2)
 
-    print(f"Training complete for {date_str}. Silhouette: {silhouette:.4f}")
+        with open(os.path.join(EMBEDDINGS_DIR, f"{today_str}.json"), "w") as f:
+            json.dump(metadata, f, indent=2)
+            
+    # REPORT: increment every training round
+    increment("training_rounds_today")
+
+    print(f"Training complete for {today_str}. Silhouette: {silhouette:.4f}")
 
 # === SCHEDULER ENTRYPOINT ===
 def schedule_embedding_pipeline():

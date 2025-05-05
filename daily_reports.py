@@ -9,6 +9,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from flask import Flask, jsonify
 from dotenv import load_dotenv
+import base64
 
 # === LOAD ENVIRONMENT VARIABLES ===
 load_dotenv()
@@ -40,7 +41,8 @@ metrics = {
     "stream_frozen_seconds": 0,
     "stream_offline_seconds": 0,
     "webrtc_connections": 0,
-    "http_api_calls": 0
+    "http_api_calls": 0,
+    "training_rounds_today":0
 }
 
 # === TRACKER UPDATE FUNCTIONS ===
@@ -60,7 +62,7 @@ def reset_daily_metrics():
         if key.endswith("today") or key in ["frames_processed", "falls_box", "falls_pose", "falls_bottom", "falls_full",
                                              "people_detected_today", "stream_offline_count", "stream_frozen_count",
                                              "stream_live_seconds", "stream_frozen_seconds", "stream_offline_seconds",
-                                             "webrtc_connections", "http_api_calls"]:
+                                             "webrtc_connections", "http_api_calls", "training_rounds_today"]:
             metrics[key] = 0
 
 # === METRIC EXTRACTION ===
@@ -132,12 +134,19 @@ def generate_html_report():
 
     if os.path.exists(vis_path):
         with open(vis_path, "rb") as img_file:
-            encoded_img = f"cid:{embedding_img_path}"
-            embedding_img_html = f"<img src='{encoded_img}' alt='Embedding Visualization' width='600'/><br/>"
+            encoded_img = base64.b64encode(img_file.read()).decode("utf-8")
+            embedding_img_html = f"<img src='data:image/png;base64,{encoded_img}' alt='Embedding Visualization' width='600'/><br/>"
+
 
     if os.path.exists(metrics_path):
         with open(metrics_path, "r") as f:
-            embedding_data = json.load(f)
+            embedding_data = {}
+            try:
+                with open(os.path.join(EMBEDDINGS_DIR, f"{today_str}.json")) as f:
+                    embedding_data = json.load(f)
+            except (FileNotFoundError, json.JSONDecodeError):
+                print("⚠️ No valid embedding metrics available for today.")
+
             embedding_metrics_html = f"""
             <ul>
                 <li><strong>Ambient Rows:</strong> {embedding_data.get('ambient_rows', '?')}</li>
