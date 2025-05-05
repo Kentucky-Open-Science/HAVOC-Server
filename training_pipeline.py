@@ -130,9 +130,10 @@ def run_embedding_pipeline(test_mode=False, skip_save=False):
 
     date_str = today.isoformat()
     if not skip_save:
-        np.save(os.path.join(EMBEDDINGS_DIR, f"{date_str}.npy"), ambient_embeds)
+        combined_ambient = np.vstack([master_embeds, ambient_embeds]) if len(master_embeds) else ambient_embeds
+        np.save(os.path.join(EMBEDDINGS_DIR, f"{date_str}.npy"), combined_ambient)
         if os.path.exists(MASTER_EMBEDDINGS_PATH):
-            master_embeds = np.load(MASTER_EMBEDDINGS_PATH)
+            master_embeds = np.load(MASTER_EMBEDDINGS_PATH) 
             master_embeds = np.concatenate([master_embeds, ambient_embeds], axis=0)
         else:
             master_embeds = ambient_embeds
@@ -177,11 +178,12 @@ def run_embedding_pipeline(test_mode=False, skip_save=False):
 
     metadata = {
         "date": str(date_str),
-        "ambient_rows": int(len(ambient_embeds)),
+        "ambient_rows": int(len(combined_ambient)),
         "target_rows": int(len(target_embeds)),
         "silhouette_score": silhouette,
         "loss": loss_value
     }
+
 
     if not skip_save:
         with open(os.path.join(EMBEDDINGS_DIR, f"{date_str}.json"), "w") as f:
