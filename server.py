@@ -342,13 +342,18 @@ def stop_recording():
 # === MANUAL TRIGGER ROUTE ===
 @flask_app.route("/send-report-now", methods=["GET"])
 def trigger_report():
-    print("🚀 Running embedding pipeline before report...")
-    run_embedding_pipeline()  # Run model training or fine-tuning
+    skip_save = request.args.get("skip_save", "true").lower() != "false"
+    print(f"🚀 Running embedding pipeline before report (skip_save={skip_save})...")
 
+    data = run_embedding_pipeline(skip_save=skip_save)
     print("📧 Sending report email...")
-    success = send_email_report()
 
-    # REPORT: increment every API call
+    # If skip_save is True, pass in-memory data to report
+    if skip_save:
+        success = send_email_report(data)
+    else:
+        success = send_email_report()
+
     increment("http_api_calls")
 
     return jsonify({"status": "sent" if success else "failed"})
@@ -556,8 +561,6 @@ if __name__ == "__main__":
         while True:
             await asyncio.sleep(3600)
             
-
-    schedule_embedding_pipeline()  # run first
     schedule_daily_report()        # then run report after embeddings are ready
 
     asyncio.run(aiohttp_main())

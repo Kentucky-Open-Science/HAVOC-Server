@@ -12,7 +12,8 @@ from sklearn.manifold import TSNE
 from sklearn.metrics import silhouette_score
 from sklearn.preprocessing import StandardScaler
 from dotenv import load_dotenv
-from daily_reports import increment, metrics
+import io
+import base64
 
 # === CONFIGURATION ===
 load_dotenv()
@@ -71,7 +72,8 @@ class Autoencoder(nn.Module):
         encoded = self.encoder(x)
         decoded = self.decoder(encoded)
         return decoded
-
+    
+    
 # === MAIN PIPELINE ===
 def run_embedding_pipeline(test_mode=False, skip_save=False):
     ensure_dirs()
@@ -122,9 +124,9 @@ def run_embedding_pipeline(test_mode=False, skip_save=False):
         ambient_embeds = model.encoder(X_tensor).numpy()
         target_embeds = model.encoder(torch.tensor(target_scaled, dtype=torch.float32)).numpy()
 
-    today_str = datetime.now().date().isoformat()
+    date_str = today.isoformat()
     if not skip_save:
-        np.save(os.path.join(EMBEDDINGS_DIR, f"{today_str}.npy"), ambient_embeds)
+        np.save(os.path.join(EMBEDDINGS_DIR, f"{date_str}.npy"), ambient_embeds)
         if os.path.exists(MASTER_EMBEDDINGS_PATH):
             master_embeds = np.load(MASTER_EMBEDDINGS_PATH)
             master_embeds = np.concatenate([master_embeds, ambient_embeds], axis=0)
@@ -142,37 +144,42 @@ def run_embedding_pipeline(test_mode=False, skip_save=False):
         ix = [i for i, l in enumerate(labels) if l == label]
         plt.scatter(tsne_result[ix, 0], tsne_result[ix, 1], label=label, alpha=0.7)
     plt.legend()
-    plt.title(f"t-SNE Visualization: {today_str}")
+    plt.title(f"t-SNE Visualization: {date_str}")
 
-    if test_mode:
-        print("\n--- TEST MODE OUTPUT ---")
-        print(f"Ambient Rows: {len(ambient_embeds)}")
-        print(f"Target Rows: {len(target_embeds)}")
-        print(f"Silhouette Score: {silhouette_score(combined_embeds, labels):.4f}")
-        print(f"Loss: {float(loss.item()):.6f}")
-        plt.show()
+    img_base64 = None
+    if skip_save:
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png')
+        buf.seek(0)
+        img_base64 = base64.b64encode(buf.read()).decode('utf-8')
+        buf.close()
+        plt.close()
     else:
-        if not skip_save:
-            plt.savefig(os.path.join(VISUALS_DIR, f"tsne_{today_str}.png"))
+        plt.savefig(os.path.join(VISUALS_DIR, f"tsne_{date_str}.png"))
         plt.close()
 
-    silhouette = silhouette_score(combined_embeds, labels)
+    silhouette = float(silhouette_score(combined_embeds, labels))
+    loss_value = float(loss.item())
+
+    metadata = {
+        "date": str(date_str),
+        "ambient_rows": int(len(ambient_embeds)),
+        "target_rows": int(len(target_embeds)),
+        "silhouette_score": silhouette,
+        "loss": loss_value
+    }
+
     if not skip_save:
-        metadata = {
-            "date": str(today_str),
-            "ambient_rows": int(len(ambient_embeds)),
-            "target_rows": int(len(target_embeds)),
-            "silhouette_score": float(silhouette),  # force native float
-            "loss": float(loss.item())              # also force native float
+        with open(os.path.join(EMBEDDINGS_DIR, f"{date_str}.json"), "w") as f:
+            json.dump(metadata, f, indent=2)
+
+    if skip_save:
+        return {
+            "tsne_image_base64": img_base64,
+            "metadata": metadata
         }
 
-        with open(os.path.join(EMBEDDINGS_DIR, f"{today_str}.json"), "w") as f:
-            json.dump(metadata, f, indent=2)
-            
-    # REPORT: increment every training round
-    increment("training_rounds_today")
-
-    print(f"Training complete for {today_str}. Silhouette: {silhouette:.4f}")
+    print(f"Training complete for {date_str}. Silhouette: {silhouette:.4f}")
 
 # === SCHEDULER ENTRYPOINT ===
 def schedule_embedding_pipeline():
