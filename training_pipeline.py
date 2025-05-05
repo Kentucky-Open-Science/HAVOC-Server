@@ -139,6 +139,8 @@ def run_embedding_pipeline(test_mode=False, skip_save=False):
             master_embeds = ambient_embeds
         np.save(MASTER_EMBEDDINGS_PATH, master_embeds)
     else:
+        combined_ambient = np.vstack([master_embeds, ambient_embeds]) if len(master_embeds) else ambient_embeds
+
         if os.path.exists(MASTER_EMBEDDINGS_PATH):
             master_embeds = np.load(MASTER_EMBEDDINGS_PATH)
         else:
