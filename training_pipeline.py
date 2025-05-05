@@ -129,22 +129,22 @@ def run_embedding_pipeline(test_mode=False, skip_save=False):
         target_embeds = model.encoder(torch.tensor(target_scaled, dtype=torch.float32)).numpy()
 
     date_str = today.isoformat()
-    if not skip_save:
-        combined_ambient = np.vstack([master_embeds, ambient_embeds]) if len(master_embeds) else ambient_embeds
-        np.save(os.path.join(EMBEDDINGS_DIR, f"{date_str}.npy"), combined_ambient)
-        if os.path.exists(MASTER_EMBEDDINGS_PATH):
-            master_embeds = np.load(MASTER_EMBEDDINGS_PATH) 
-            master_embeds = np.concatenate([master_embeds, ambient_embeds], axis=0)
-        else:
-            master_embeds = ambient_embeds
-        np.save(MASTER_EMBEDDINGS_PATH, master_embeds)
-    else:
-        combined_ambient = np.vstack([master_embeds, ambient_embeds]) if len(master_embeds) else ambient_embeds
 
-        if os.path.exists(MASTER_EMBEDDINGS_PATH):
-            master_embeds = np.load(MASTER_EMBEDDINGS_PATH)
-        else:
-            master_embeds = np.array([]).reshape(0, embedding_dim)
+    # Always load or initialize master_embeds first
+    if os.path.exists(MASTER_EMBEDDINGS_PATH):
+        master_embeds = np.load(MASTER_EMBEDDINGS_PATH)
+    else:
+        master_embeds = np.array([]).reshape(0, embedding_dim)
+
+    # Combine today's ambient with prior embeddings
+    combined_ambient = np.vstack([master_embeds, ambient_embeds]) if len(master_embeds) else ambient_embeds
+
+    # Save updated model/embeddings if needed
+    if not skip_save:
+        torch.save(model.state_dict(), MODEL_PATH)
+        np.save(os.path.join(EMBEDDINGS_DIR, f"{date_str}.npy"), combined_ambient)
+        np.save(MASTER_EMBEDDINGS_PATH, combined_ambient)  # Overwrite master with combined
+
 
     tsne = TSNE(n_components=2, random_state=42)
     combined_embeds = np.vstack([master_embeds, ambient_embeds, target_embeds]) if len(master_embeds) else np.vstack([ambient_embeds, target_embeds])
