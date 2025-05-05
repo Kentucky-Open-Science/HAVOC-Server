@@ -7,7 +7,12 @@ import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
+
+# Use a non-GUI backend for Matplotlib to avoid thread errors
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+
 from sklearn.manifold import TSNE
 from sklearn.metrics import silhouette_score
 from sklearn.preprocessing import StandardScaler
@@ -115,7 +120,6 @@ def run_embedding_pipeline(test_mode=False, skip_save=False):
         loss.backward()
         optimizer.step()
 
-    # Skip saving if flag is set
     if not skip_save:
         torch.save(model.state_dict(), MODEL_PATH)
 
@@ -133,11 +137,21 @@ def run_embedding_pipeline(test_mode=False, skip_save=False):
         else:
             master_embeds = ambient_embeds
         np.save(MASTER_EMBEDDINGS_PATH, master_embeds)
+    else:
+        if os.path.exists(MASTER_EMBEDDINGS_PATH):
+            master_embeds = np.load(MASTER_EMBEDDINGS_PATH)
+        else:
+            master_embeds = np.array([]).reshape(0, embedding_dim)
 
     tsne = TSNE(n_components=2, random_state=42)
-    combined_embeds = np.vstack([ambient_embeds, target_embeds])
+    combined_embeds = np.vstack([master_embeds, ambient_embeds, target_embeds]) if len(master_embeds) else np.vstack([ambient_embeds, target_embeds])
+    labels = (
+        ["ambient"] * (len(master_embeds) + len(ambient_embeds)) +
+        ["target"] * len(target_embeds)
+    )
+
+
     tsne_result = tsne.fit_transform(combined_embeds)
-    labels = ["ambient"] * len(ambient_embeds) + ["target"] * len(target_embeds)
 
     plt.figure(figsize=(10, 6))
     for label in set(labels):

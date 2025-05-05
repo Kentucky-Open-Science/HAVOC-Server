@@ -175,7 +175,7 @@ def generate_html_report(metadata=None, img_base64=None):
         html += f"""
         <h3>🧠 Embedding Metrics (In-Memory)</h3>
         <ul>
-            <li><strong>Ambient Rows:</strong> {metadata['ambient_rows']}</li>
+            <li><strong>New Ambient Rows:</strong> {metadata['ambient_rows']}</li>
             <li><strong>Target Rows:</strong> {metadata['target_rows']}</li>
             <li><strong>Silhouette Score:</strong> {metadata['silhouette_score']:.4f}</li>
             <li><strong>Loss:</strong> {metadata['loss']:.4f}</li>
@@ -194,7 +194,7 @@ def generate_html_report(metadata=None, img_base64=None):
             html += f"""
             <h3>🧠 Embedding Metrics</h3>
             <ul>
-                <li><strong>Ambient Rows:</strong> {embedding_data['ambient_rows']}</li>
+                <li><strong>New Ambient Rows:</strong> {embedding_data['ambient_rows']}</li>
                 <li><strong>Target Rows:</strong> {embedding_data['target_rows']}</li>
                 <li><strong>Silhouette Score:</strong> {embedding_data['silhouette_score']:.4f}</li>
                 <li><strong>Loss:</strong> {embedding_data['loss']:.4f}</li>

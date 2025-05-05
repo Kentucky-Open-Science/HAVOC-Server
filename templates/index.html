@@ -30,10 +30,7 @@
         <!-- Left: Video Feed -->
         <div class="flex-[2] bg-white rounded shadow p-6">
             <img src="{{ url_for('video_feed') }}" alt="Video Stream" class="w-full h-auto rounded">
-            <button id="toggle-mode" class="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-blue-500 text-white px-4 py-2 rounded shadow hover:bg-blue-600">
-                🕶️ Glasses
-            </button>
-            
+
             <div class="mt-4 text-center">
                 <p class="text-xl">Stream: <span id="stream_status">{{ stream_status }}</span></p>
                 <p class="text-lg text-gray-600">Last Frame: <span id="last_frame_time">{{ last_frame_time }}</span></p>
@@ -70,19 +67,26 @@
         </div>
     </div>
 
-    <!-- Recording Buttons -->
+    <!-- Recording + Glasses Buttons -->
     <div class="w-full flex justify-center mb-12">
         <div class="bg-white p-6 rounded shadow text-center">
-            <button id="start-recording"
-                class="bg-green-500 text-white text-xl px-6 py-3 rounded mr-4 hover:bg-green-600">
-                Start Recording
-            </button>
-            <button id="stop-recording" class="bg-red-500 text-white text-xl px-6 py-3 rounded hover:bg-red-600">
-                Stop Recording
-            </button>
+            <div class="flex flex-row justify-center items-center space-x-4">
+                <button id="start-recording"
+                    class="bg-green-500 text-white text-xl px-6 py-3 rounded hover:bg-green-600">
+                    Start Recording
+                </button>
+                <button id="stop-recording" class="bg-red-500 text-white text-xl px-6 py-3 rounded hover:bg-red-600">
+                    Stop Recording
+                </button>
+                <button id="toggle-mode"
+                    class="bg-blue-500 text-white text-xl px-6 py-3 rounded shadow hover:bg-blue-600">
+                    🕶️ Glasses
+                </button>
+            </div>
             <p id="recording-status" class="mt-4 text-lg text-gray-700">Not recording.</p>
         </div>
     </div>
+
 </body>
 
 
