@@ -24,8 +24,7 @@ from daily_reports import (
     update_csv_metrics,
     metrics,
 )
-
-
+from training_pipeline import schedule_embedding_pipeline, run_embedding_pipeline
 from yolo_fall_detection import FallDetector  # Import the FallDetector class
 
 # Set logging to INFO level
@@ -340,16 +339,25 @@ def stop_recording():
 
     return jsonify({'status': 'recording stopped'}), 200
 
-
 # === MANUAL TRIGGER ROUTE ===
 @flask_app.route("/send-report-now", methods=["GET"])
 def trigger_report():
-    success = send_email_report()
-    
-    #REPORT: increment every api call
+    skip_save = request.args.get("skip_save", "true").lower() != "false"
+    print(f"🚀 Running embedding pipeline before report (skip_save={skip_save})...")
+
+    data = run_embedding_pipeline(skip_save=skip_save)
+    print("📧 Sending report email...")
+
+    # If skip_save is True, pass in-memory data to report
+    if skip_save:
+        success = send_email_report(data)
+    else:
+        success = send_email_report()
+
     increment("http_api_calls")
 
     return jsonify({"status": "sent" if success else "failed"})
+
 
 @flask_app.route('/metrics', methods=['GET'])
 def get_metrics():
@@ -553,9 +561,6 @@ if __name__ == "__main__":
         while True:
             await asyncio.sleep(3600)
             
-            
-    from daily_reports import schedule_daily_report
-    schedule_daily_report()
-
+    schedule_daily_report()        # then run report after embeddings are ready
 
     asyncio.run(aiohttp_main())

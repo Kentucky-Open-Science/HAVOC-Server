@@ -3,11 +3,14 @@ import csv
 import smtplib
 import shutil
 import threading
+import base64
 from datetime import datetime, timedelta
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from dotenv import load_dotenv
+import json
+from training_pipeline import run_embedding_pipeline
 
 # === LOAD ENVIRONMENT VARIABLES ===
 load_dotenv()
@@ -19,6 +22,8 @@ EMAIL_SENDER = os.getenv("TEMI_EMAIL_SENDER")
 EMAIL_PASSWORD = os.getenv("TEMI_EMAIL_PASSWORD")
 EMAIL_RECIPIENTS = os.getenv("TEMI_EMAIL_RECIPIENTS", "").split(",")
 REPORT_TIME = os.getenv("TEMI_REPORT_TIME", "20:00")  # Default to 8 PM
+EMBEDDINGS_DIR = "embeddings"
+VISUALS_DIR = "visualizations"
 
 # === METRIC TRACKERS ===
 metrics = {
@@ -97,13 +102,12 @@ def get_video_metrics():
                 count_total += 1
                 total_size += os.path.getsize(path)
 
-                # Check if the filename has today's date
                 if f.startswith("recorded_video_"):
                     parts = f.replace("recorded_video_", "").split("_")
                     if parts and parts[0] == today_str:
                         count_today += 1
 
-    total_size_mb = round(total_size / (1024 * 1024), 2)  # in MB
+    total_size_mb = round(total_size / (1024 * 1024), 2)
     return count_total, count_today, total_size_mb
 
 def format_seconds(seconds):
@@ -113,17 +117,17 @@ def format_seconds(seconds):
     secs = seconds % 60
     return f"{hours:02}:{minutes:02}:{secs:02}"
 
-
 # === EMAIL REPORT GENERATION ===
-def generate_html_report():
+def generate_html_report(metadata=None, img_base64=None):
     update_csv_metrics()
     count_total, count_today, total_size = get_video_metrics()
     disk_free = get_disk_space()
+    date_str = datetime.now().date().isoformat()
 
     html = f"""
     <html>
     <body style='font-family:Arial; background-color:#f4f4f4; padding:20px;'>
-        <h2 style='color:#2c3e50;'>🤖 Temi Server Daily Report - {datetime.now().strftime('%Y-%m-%d')}</h2>
+        <h2 style='color:#2c3e50;'>🤖 Temi Server Daily Report - {date_str}</h2>
 
         <h3>📊 Data Collection</h3>
         <ul>
@@ -151,7 +155,6 @@ def generate_html_report():
             <li><strong>Offline time:</strong> {format_seconds(metrics['stream_offline_seconds'])}</li>
         </ul>
 
-
         <h3>🌐 API Activity</h3>
         <ul>
             <li><strong>WebRTC connections:</strong> {metrics['webrtc_connections']}</li>
@@ -166,17 +169,55 @@ def generate_html_report():
             <li><strong>Total video size:</strong> {total_size} MB</li>
             <li><strong>Disk space remaining:</strong> {disk_free} GB</li>
         </ul>
-
-
-        <p style='color:#95a5a6;'>Report generated automatically by Temi server at {datetime.now().strftime('%H:%M:%S')}.</p>
-    </body>
-    </html>
     """
+    # === Embedding Metrics Section ===
+    if metadata and img_base64:
+        html += f"""
+        <h3>🧠 Embedding Metrics (In-Memory)</h3>
+        <ul>
+            <li><strong>Ambient Rows:</strong> {metadata['ambient_rows']}</li>
+            <li><strong>Target Rows:</strong> {metadata['target_rows']}</li>
+            <li><strong>Silhouette Score:</strong> {metadata['silhouette_score']:.4f}</li>
+            <li><strong>Loss:</strong> {metadata['loss']:.4f}</li>
+        </ul>
+        <img src="data:image/png;base64,{img_base64}" alt="t-SNE Plot" style="max-width:100%; border:1px solid #ccc; padding:5px;" />
+        """
+    else:
+        date_str = datetime.now().date().isoformat()
+        json_path = os.path.join("embeddings", f"{date_str}.json")
+        img_path = os.path.join("visualizations", f"tsne_{date_str}.png")
+
+        if os.path.exists(json_path):
+            with open(json_path) as f:
+                embedding_data = json.load(f)
+
+            html += f"""
+            <h3>🧠 Embedding Metrics</h3>
+            <ul>
+                <li><strong>Ambient Rows:</strong> {embedding_data['ambient_rows']}</li>
+                <li><strong>Target Rows:</strong> {embedding_data['target_rows']}</li>
+                <li><strong>Silhouette Score:</strong> {embedding_data['silhouette_score']:.4f}</li>
+                <li><strong>Loss:</strong> {embedding_data['loss']:.4f}</li>
+            </ul>
+            """
+        else:
+            html += "<h3>🧠 Embedding Metrics</h3><p style='color:red;'>No embedding metadata available.</p>"
+
+        if os.path.exists(img_path):
+            with open(img_path, "rb") as img_f:
+                img_base64 = base64.b64encode(img_f.read()).decode('utf-8')
+            html += f"<img src='data:image/png;base64,{img_base64}' alt='t-SNE Plot' style='max-width:100%; border:1px solid #ccc; padding:5px;'/>"
+        else:
+            html += "<p style='color:red;'>No t-SNE image available.</p>"
+
     return html
 
-def send_email_report():
+def send_email_report(pipeline_data=None):
+    metadata = pipeline_data.get("metadata") if pipeline_data else None
+    img_base64 = pipeline_data.get("tsne_image_base64") if pipeline_data else None
+
     subject = f"Temi Server Report - {datetime.now().strftime('%Y-%m-%d')}"
-    html = generate_html_report()
+    html = generate_html_report(metadata, img_base64)
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
@@ -207,6 +248,11 @@ def schedule_daily_report():
     print(f"📅 Daily report scheduled in {round(delay / 60)} minutes.")
 
 def run_and_reschedule():
+    print("⏱ Running embedding pipeline before daily report...")
+    run_embedding_pipeline()  # Always save during scheduled run
+
+    print("📧 Sending report email...")
     send_email_report()
+
     reset_daily_metrics()
     schedule_daily_report()
