@@ -44,7 +44,7 @@ duplicate_threshold = 5
 freeze_threshold = 5.0
 last_frame_time = "N/A"
 last_should_record = False
-vision_mode = {"glasses": False, "last_toggle": 0}
+vision_mode = {"glasses": False, "fullscreen": False, "last_toggle": 0}
 
 
 # Load offline placeholder image
@@ -230,13 +230,25 @@ def index():
             stream_status = "Live"
     return render_template('index.html', stream_status=stream_status, last_frame_time=last_frame_time)
 
-@flask_app.route('/toggle-vision-mode', methods=['POST'])
-def toggle_vision_mode():
+@flask_app.route('/set-vision-mode', methods=['POST'])
+def set_vision_mode():
     global vision_mode
     data = request.get_json()
-    vision_mode['glasses'] = data.get('glasses', False)
+    mode = data.get('mode')  # 'glasses' or 'fullscreen'
+
+    if mode == 'glasses':
+        vision_mode['glasses'] = True
+        vision_mode['fullscreen'] = False
+    elif mode == 'fullscreen':
+        vision_mode['fullscreen'] = True
+        vision_mode['glasses'] = False
+    else:
+        vision_mode['fullscreen'] = False
+        vision_mode['glasses'] = False
+
     vision_mode['last_toggle'] = time.time()
-    return jsonify({"status": "ok", "glasses": vision_mode['glasses']})
+    return jsonify({"status": "ok", "vision_mode": vision_mode})
+
 
 @flask_app.route('/status')
 def get_status():
@@ -422,6 +434,10 @@ def gen_frames():
                     grid_img = fall_detector.draw_glasses_mustache(cv2.resize(img.copy(), (640, 480)))
                     if time.time() - vision_mode['last_toggle'] > 30:
                         vision_mode['glasses'] = False
+                elif vision_mode['fullscreen']:
+                    grid_img = cv2.resize(img.copy(), (640, 480))
+                    if time.time() - vision_mode['last_toggle'] > 60:
+                        vision_mode['fullscreen'] = False
                 else:
                     height, width = img.shape[:2]
                     half_w, half_h = width // 2, height // 2
