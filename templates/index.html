@@ -8,8 +8,6 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
-
-
 <body class="bg-gray-100 min-h-screen text-[1.25rem] md:text-[1.5rem] leading-relaxed">
     <!-- ASCII Art Header -->
     <div class="ascii-art text-center py-6">
@@ -30,7 +28,6 @@
         <!-- Left: Video Feed -->
         <div class="flex-[2] bg-white rounded shadow p-6">
             <img src="{{ url_for('video_feed') }}" alt="Video Stream" class="w-full h-auto rounded">
-
             <div class="mt-4 text-center">
                 <p class="text-xl">Stream: <span id="stream_status">{{ stream_status }}</span></p>
                 <p class="text-lg text-gray-600">Last Frame: <span id="last_frame_time">{{ last_frame_time }}</span></p>
@@ -39,7 +36,6 @@
 
         <!-- Right: Metrics on top, Chart below -->
         <div class="flex-[1] flex flex-col gap-6">
-            <!-- Metrics -->
             <div class="bg-green-100 rounded shadow p-6">
                 <h2 class="text-2xl font-semibold mb-4 text-center">📈 Real-Time Metrics</h2>
                 <div id="metrics-display" class="grid grid-cols-2 gap-x-6 gap-y-3 text-lg text-gray-800">
@@ -54,80 +50,136 @@
                 </div>
             </div>
 
-            <!-- Sensor Chart -->
             <div class="bg-blue-100 rounded shadow p-6 h-full flex flex-col">
-                <h2 class="text-2xl font-semibold text-center">Smell Sensor Fluctuations Based on Moving Average (100x)
-                </h2>
+                <h2 class="text-2xl font-semibold text-center">Smell Sensor Fluctuations Based on Moving Average (100x)</h2>
                 <p class="text-lg text-gray-600 text-center mb-4">Timestamp: <span id="sensor_timestamp">-</span></p>
                 <div class="flex-grow overflow-hidden">
                     <canvas id="sensorChart" class="w-full h-full"></canvas>
                 </div>
             </div>
-
         </div>
     </div>
 
-    <!-- Recording + Glasses Buttons -->
+    <!-- Controls -->
     <div class="w-full flex justify-center mb-12">
         <div class="bg-white p-6 rounded shadow text-center">
             <div class="flex flex-row justify-center items-center space-x-4">
-                <button id="start-recording"
-                    class="bg-green-500 text-white text-xl px-6 py-3 rounded hover:bg-green-600">
-                    Start Recording
-                </button>
-                <button id="stop-recording" class="bg-red-500 text-white text-xl px-6 py-3 rounded hover:bg-red-600">
-                    Stop Recording
-                </button>
-                <button id="toggle-mode"
-                    class="bg-blue-500 text-white text-xl px-6 py-3 rounded shadow hover:bg-blue-600">
-                    🕶️ Glasses
-                </button>
+                <button id="start-recording" class="bg-green-500 text-white text-xl px-6 py-3 rounded hover:bg-green-600">Start Recording</button>
+                <button id="stop-recording" class="bg-red-500 text-white text-xl px-6 py-3 rounded hover:bg-red-600">Stop Recording</button>
+                <button id="toggle-mode" class="bg-blue-500 text-white text-xl px-6 py-3 rounded shadow hover:bg-blue-600">Glasses</button>
+                <button id="toggle-fullscreen" class="bg-purple-500 text-white text-xl px-6 py-3 rounded shadow hover:bg-purple-600">Fullscreen</button>
             </div>
             <p id="recording-status" class="mt-4 text-lg text-gray-700">Not recording.</p>
         </div>
     </div>
 
-</body>
-
-
-
-<!-- JavaScript -->
 <script>
     let sensorChart;
     const windowSize = 3;
     const sensorHistory = [];
     const sensorDataLength = 66;
     let baseline = null;
-    const sensitivityFactor = 100;  // <-- Adjust sensitivity here
-    let glassesMode = false;
-    let toggleTimeout;
+    const sensitivityFactor = 100;
 
-    function updateToggleButton() {
-        const button = document.getElementById('toggle-mode');
-        button.textContent = glassesMode ? 'Fall Detection' : '🕶️ Glasses';
+    let glassesMode = false;
+    let fullscreenMode = false;
+    let recording = false;
+
+    let toggleTimeout;
+    let fullscreenTimeout;
+
+    function updateButtonStates() {
+        const btnStart = document.getElementById('start-recording');
+        const btnStop = document.getElementById('stop-recording');
+        const btnGlasses = document.getElementById('toggle-mode');
+        const btnFullscreen = document.getElementById('toggle-fullscreen');
+
+        [btnStart, btnStop, btnGlasses, btnFullscreen].forEach(btn =>
+            btn.classList.remove("ring", "ring-offset-2", "ring-offset-white", "ring-gray-400", "opacity-90")
+        );
+
+        if (recording) {
+            btnStart.classList.add("ring", "ring-offset-2", "ring-offset-white", "ring-gray-400", "opacity-90");
+        } else {
+            btnStop.classList.add("ring", "ring-offset-2", "ring-offset-white", "ring-gray-400", "opacity-90");
+        }
+
+        if (glassesMode) {
+            btnGlasses.classList.add("ring", "ring-offset-2", "ring-offset-white", "ring-gray-400", "opacity-90");
+        }
+
+        if (fullscreenMode) {
+            btnFullscreen.classList.add("ring", "ring-offset-2", "ring-offset-white", "ring-gray-400", "opacity-90");
+        }
     }
+
+    document.getElementById('start-recording').onclick = () => {
+        fetch('/start-recording', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                recording = true;
+                document.getElementById('recording-status').innerText = data.status;
+                updateButtonStates();
+            });
+    };
+
+    document.getElementById('stop-recording').onclick = () => {
+        fetch('/stop-recording', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                recording = false;
+                document.getElementById('recording-status').innerText = data.status;
+                updateButtonStates();
+            });
+    };
 
     document.getElementById('toggle-mode').onclick = () => {
         glassesMode = !glassesMode;
-        updateToggleButton();
+        fullscreenMode = false;
+        updateButtonStates();
 
-        fetch('/toggle-vision-mode', {
+        fetch('/set-vision-mode', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ glasses: glassesMode })
+            body: JSON.stringify({ mode: glassesMode ? 'glasses' : 'none' })
         });
 
         if (glassesMode) {
             clearTimeout(toggleTimeout);
             toggleTimeout = setTimeout(() => {
                 glassesMode = false;
-                updateToggleButton();
-                fetch('/toggle-vision-mode', {
+                updateButtonStates();
+                fetch('/set-vision-mode', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ glasses: false })
+                    body: JSON.stringify({ mode: 'none' })
                 });
             }, 30000);
+        }
+    };
+
+    document.getElementById('toggle-fullscreen').onclick = () => {
+        fullscreenMode = !fullscreenMode;
+        glassesMode = false;
+        updateButtonStates();
+
+        fetch('/set-vision-mode', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode: fullscreenMode ? 'fullscreen' : 'none' })
+        });
+
+        if (fullscreenMode) {
+            clearTimeout(fullscreenTimeout);
+            fullscreenTimeout = setTimeout(() => {
+                fullscreenMode = false;
+                updateButtonStates();
+                fetch('/set-vision-mode', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mode: 'none' })
+                });
+            }, 60000);
         }
     };
 
@@ -140,43 +192,45 @@
     }
 
     function normalizeUsingWindow(newFrame) {
-        if (sensorHistory.length >= windowSize) {
-            sensorHistory.shift();
-        }
+        if (sensorHistory.length >= windowSize) sensorHistory.shift();
         sensorHistory.push(newFrame);
-
-        if (sensorHistory.length < windowSize) {
-            // Not enough data yet
-            return Array(sensorDataLength).fill(0);
-        }
-
-        if (!baseline) {
-            baseline = computeBaseline(sensorHistory);
-        }
+        if (sensorHistory.length < windowSize) return Array(sensorDataLength).fill(0);
+        if (!baseline) baseline = computeBaseline(sensorHistory);
 
         return newFrame.map((val, i) => {
             if (baseline[i] === 0) return 0;
             let normalizedVal = (val - baseline[i]) / baseline[i];
-            normalizedVal *= sensitivityFactor;
-            return Math.max(-1, Math.min(normalizedVal, 1));
+            return Math.max(-1, Math.min(normalizedVal * sensitivityFactor, 1));
         });
     }
 
-
     function updateStatus() {
         fetch('/status')
-            .then(response => response.json())
+            .then(res => res.json())
             .then(data => {
                 document.getElementById('stream_status').innerText = data.stream_status;
                 document.getElementById('last_frame_time').innerText = data.last_frame_time;
-            })
-            .catch(error => console.error('Error fetching status:', error));
+            });
+    }
+
+    function updateSensorData() {
+        fetch('/get-latest-sensor-data')
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('sensor_timestamp').innerText = data.timestamp || "-";
+                if (Array.isArray(data.data)) {
+                    const cleaned = data.data.map(Number).filter(n => !isNaN(n));
+                    if (cleaned.length === sensorDataLength) {
+                        const normalized = normalizeUsingWindow(cleaned);
+                        createOrUpdateChart(normalized);
+                    }
+                }
+            });
     }
 
     function createOrUpdateChart(values) {
         const ctx = document.getElementById('sensorChart').getContext('2d');
         const labels = values.map((_, i) => `#${i + 1}`);
-
         const data = {
             labels: labels,
             datasets: [{
@@ -201,29 +255,21 @@
                         max: 1,
                         ticks: {
                             stepSize: 0.1,
-                            callback: (val) => `${(val * 100).toFixed(0)}%`
+                            callback: val => `${(val * 100).toFixed(0)}%`
                         },
                         grid: {
                             drawBorder: true,
-                            color: (ctx) => ctx.tick.value === 0 ? '#000' : '#e5e7eb'
+                            color: ctx => ctx.tick.value === 0 ? '#000' : '#e5e7eb'
                         }
                     },
                     y: {
                         ticks: {
                             autoSkip: false,
-                            maxRotation: 0,
-                            minRotation: 0,
-                            callback: function (value, index) {
-                                // Show label every 2 bars (i.e., for even index)
-                                return index % 2 === 0 ? this.getLabelForValue(value) : '';
-                            }
+                            callback: (value, index) => index % 2 === 0 ? value : ''
                         }
                     }
-
                 },
-                plugins: {
-                    legend: { display: false }
-                },
+                plugins: { legend: { display: false } },
                 elements: {
                     bar: {
                         barThickness: 'flex',
@@ -243,31 +289,9 @@
         }
     }
 
-
-    function updateSensorData() {
-        fetch('/get-latest-sensor-data')
-            .then(response => response.json())
-            .then(data => {
-                document.getElementById('sensor_timestamp').innerText = data.timestamp || "-";
-                if (data.data && Array.isArray(data.data)) {
-                    const cleanedValues = data.data.map(v => parseFloat(v)).filter(v => !isNaN(v));
-
-                    console.log("Cleaned Values Length:", cleanedValues.length, cleanedValues);
-
-
-                    if (cleanedValues.length === sensorDataLength) {
-                        const normalized = normalizeUsingWindow(cleanedValues);
-                        createOrUpdateChart(normalized);
-                    }
-                }
-
-            })
-            .catch(error => console.error('Error fetching sensor data:', error));
-    }
-
     function updateMetrics() {
         fetch('/metrics')
-            .then(response => response.json())
+            .then(res => res.json())
             .then(data => {
                 document.getElementById('people_detected_today').innerText = data.people_detected_today;
                 document.getElementById('falls_box').innerText = data.falls_box;
@@ -277,38 +301,17 @@
                 document.getElementById('frames_processed').innerText = data.frames_processed;
                 document.getElementById('new_csv_rows_today').innerText = data.new_csv_rows_today;
                 document.getElementById('total_csv_rows').innerText = data.total_csv_rows;
-            })
-            .catch(error => console.error('Error fetching metrics:', error));
+            });
     }
-
-
-    document.getElementById('start-recording').onclick = () => {
-        fetch('/start-recording', { method: 'POST' })
-            .then(res => res.json())
-            .then(data => {
-                document.getElementById('recording-status').innerText = data.status;
-            })
-            .catch(e => console.error(e));
-    };
-
-    document.getElementById('stop-recording').onclick = () => {
-        fetch('/stop-recording', { method: 'POST' })
-            .then(res => res.json())
-            .then(data => {
-                document.getElementById('recording-status').innerText = data.status;
-            })
-            .catch(e => console.error(e));
-    };
 
     setInterval(updateStatus, 1000);
     setInterval(updateSensorData, 1000);
     setInterval(updateMetrics, 1000);
 
+    updateButtonStates();
     updateMetrics();
     updateStatus();
     updateSensorData();
-    updateToggleButton();
 </script>
 </body>
-
 </html>
