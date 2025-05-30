@@ -1,3 +1,332 @@
+{##<!DOCTYPE html>#}
+{#{#<html lang="en">#}
+{#{##}
+{#{#<head>#}
+{#{#    <meta charset="UTF-8">#}
+{#{#    <title>Stream Monitor</title>#}
+{#{#    <script src="https://cdn.tailwindcss.com"></script>#}
+{#{#    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>#}
+{#{#</head>#}
+{#{##}
+{#{#<body class="bg-gray-100 min-h-screen text-[1.25rem] md:text-[1.5rem] leading-relaxed">#}
+{#{#    <!-- ASCII Art Header -->#}
+{#{#    <div class="ascii-art text-center py-6">#}
+{#{#        <pre class="text-2xl md:text-3xl font-mono text-gray-700 overflow-auto">#}
+{#{#╔══════════════════════════════════════════════════════════════════════════════════╗#}
+{#{#║  ████████╗███████╗███╗   ███╗██╗    ██████╗  ██████╗ ██████╗  ██████╗ ████████╗  ║#}
+{#{#║  ╚══██╔══╝██╔════╝████╗ ████║██║    ██╔══██╗██╔═══██╗██╔══██╗██╔═══██╗╚══██╔══╝  ║#}
+{#{#║     ██║   █████╗  ██╔████╔██║██║    ██████╔╝██║   ██║██████╔╝██║   ██║   ██║     ║#}
+{#{#║     ██║   ██╔══╝  ██║╚██╔╝██║██║    ██╔══██╗██║   ██║██╔══██╗██║   ██║   ██║     ║#}
+{#{#║     ██║   ███████╗██║ ╚═╝ ██║██║    ██║  ██║╚██████╔╝██████╔╝╚██████╔╝   ██║     ║#}
+{#{#║     ╚═╝   ╚══════╝╚═╝     ╚═╝╚═╝    ╚═╝  ╚═╝ ╚═════╝ ╚═════╝  ╚═════╝    ╚═╝     ║#}
+{#{#╚══════════════════════════════════════════════════════════════════════════════════╝#}
+{#{#        </pre>#}
+{#{#    </div>#}
+{#{##}
+{#{#    <!-- Main Flex Container -->#}
+{#{#    <div class="flex flex-col md:flex-row gap-6 px-6 pb-12 w-[75%] mx-auto">#}
+{#{#        <!-- Left: Video Feed -->#}
+{#{#        <div class="flex-[2] bg-white rounded shadow p-6">#}
+{#{#            <img src="{{ url_for('video_feed') }}" alt="Video Stream" class="w-full h-auto rounded">#}
+{#{#            <div class="mt-4 text-center">#}
+{#{#                <p class="text-xl">Stream: <span id="stream_status">{{ stream_status }}</span></p>#}
+{#{#                <p class="text-lg text-gray-600">Last Frame: <span id="last_frame_time">{{ last_frame_time }}</span></p>#}
+{#{#            </div>#}
+{#{#        </div>#}
+{#{##}
+{#{#        <!-- Right: Metrics on top, Chart below -->#}
+{#{#        <div class="flex-[1] flex flex-col gap-6">#}
+{#{#            <div class="bg-green-100 rounded shadow p-6">#}
+{#{#                <h2 class="text-2xl font-semibold mb-4 text-center">📈 Real-Time Metrics</h2>#}
+{#{#                <div id="metrics-display" class="grid grid-cols-2 gap-x-6 gap-y-3 text-lg text-gray-800">#}
+{#{#                    <p><strong>People Detected Today:</strong> <span id="people_detected_today">-</span></p>#}
+{#{#                    <p><strong>Falls (Box):</strong> <span id="falls_box">-</span></p>#}
+{#{#                    <p><strong>Falls (Pose):</strong> <span id="falls_pose">-</span></p>#}
+{#{#                    <p><strong>Falls (Bottom):</strong> <span id="falls_bottom">-</span></p>#}
+{#{#                    <p><strong>Falls (Full):</strong> <span id="falls_full">-</span></p>#}
+{#{#                    <p><strong>Frames Processed:</strong> <span id="frames_processed">-</span></p>#}
+{#{#                    <p><strong>Smells Detected Today:</strong> <span id="new_csv_rows_today">-</span></p>#}
+{#{#                    <p><strong>Total Smells:</strong> <span id="total_csv_rows">-</span></p>#}
+{#{#                </div>#}
+{#{#            </div>#}
+{#{##}
+{#{#            <div class="bg-blue-100 rounded shadow p-6 h-full flex flex-col">#}
+{#{#                <h2 class="text-2xl font-semibold text-center">Smell Sensor Fluctuations Based on Moving Average (100x)</h2>#}
+{#{#                <p class="text-lg text-gray-600 text-center mb-4">Timestamp: <span id="sensor_timestamp">-</span></p>#}
+{#{#                <div class="flex-grow overflow-hidden">#}
+{#{#                    <canvas id="sensorChart" class="w-full h-full"></canvas>#}
+{#{#                </div>#}
+{#{#            </div>#}
+{#{#        </div>#}
+{#{##}
+{#{#        <!-- Map Below everything -->#}
+{#{#        <div>#}
+{#{#            <h2> class="text-2xl font-semibold text-center">Robot Location on Map</h2>#}
+{#{#            <div id="map-container" style="position: relative; width: 100%; max-width: 800px; margin: 20px auto;">#}
+{#{#                <img id="map-image" src="map.png" alt="Temi Robot Map" style="width: 100%; height: auto;">#}
+{#{#                <div id="robot-dot" style="position: absolute; width: 10px; height: 10px; background-color: red; border-radius: 50%; transform: translate(-50%, -50%);"></div>#}
+{#{#            </div>#}
+{#{#        </div>#}
+{#{#    </div>#}
+{#{##}
+{#{##}
+{#{##}
+{#{#    <!-- Controls -->#}
+{#{#    <div class="w-full flex justify-center mb-12">#}
+{#{#        <div class="bg-white p-6 rounded shadow text-center">#}
+{#{#            <div class="flex flex-row justify-center items-center space-x-4">#}
+{#{#                <button id="start-recording" class="bg-green-500 text-white text-xl px-6 py-3 rounded hover:bg-green-600">Start Recording</button>#}
+{#{#                <button id="stop-recording" class="bg-red-500 text-white text-xl px-6 py-3 rounded hover:bg-red-600">Stop Recording</button>#}
+{#{#                <button id="toggle-mode" class="bg-blue-500 text-white text-xl px-6 py-3 rounded shadow hover:bg-blue-600">Glasses</button>#}
+{#{#                <button id="toggle-fullscreen" class="bg-purple-500 text-white text-xl px-6 py-3 rounded shadow hover:bg-purple-600">Fullscreen</button>#}
+{#{#            </div>#}
+{#{#            <p id="recording-status" class="mt-4 text-lg text-gray-700">Not recording.</p>#}
+{#{#        </div>#}
+{#{#    </div>#}
+{#{##}
+{#{#<script>#}
+{#{#    let sensorChart;#}
+{#{#    const windowSize = 3;#}
+{#{#    const sensorHistory = [];#}
+{#{#    const sensorDataLength = 66;#}
+{#{#    let baseline = null;#}
+{#{#    const sensitivityFactor = 100;#}
+{#{##}
+{#{#    let glassesMode = false;#}
+{#{#    let fullscreenMode = false;#}
+{#{#    let recording = false;#}
+{#{##}
+{#{#    let toggleTimeout;#}
+{#{#    let fullscreenTimeout;#}
+{#{##}
+{#{#    function updateButtonStates() {#}
+{#{#        const btnStart = document.getElementById('start-recording');#}
+{#{#        const btnStop = document.getElementById('stop-recording');#}
+{#{#        const btnGlasses = document.getElementById('toggle-mode');#}
+{#{#        const btnFullscreen = document.getElementById('toggle-fullscreen');#}
+{#{##}
+{#{#        [btnStart, btnStop, btnGlasses, btnFullscreen].forEach(btn =>#}
+{#{#            btn.classList.remove("ring", "ring-offset-2", "ring-offset-white", "ring-gray-400", "opacity-90")#}
+{#{#        );#}
+{#{##}
+{#{#        if (recording) {#}
+{#{#            btnStart.classList.add("ring", "ring-offset-2", "ring-offset-white", "ring-gray-400", "opacity-90");#}
+{#{#        } else {#}
+{#{#            btnStop.classList.add("ring", "ring-offset-2", "ring-offset-white", "ring-gray-400", "opacity-90");#}
+{#{#        }#}
+{#{##}
+{#{#        if (glassesMode) {#}
+{#{#            btnGlasses.classList.add("ring", "ring-offset-2", "ring-offset-white", "ring-gray-400", "opacity-90");#}
+{#{#        }#}
+{#{##}
+{#{#        if (fullscreenMode) {#}
+{#{#            btnFullscreen.classList.add("ring", "ring-offset-2", "ring-offset-white", "ring-gray-400", "opacity-90");#}
+{#{#        }#}
+{#{#    }#}
+{#{##}
+{#{#    document.getElementById('start-recording').onclick = () => {#}
+{#{#        fetch('/start-recording', { method: 'POST' })#}
+{#{#            .then(res => res.json())#}
+{#{#            .then(data => {#}
+{#{#                recording = true;#}
+{#{#                document.getElementById('recording-status').innerText = data.status;#}
+{#{#                updateButtonStates();#}
+{#{#            });#}
+{#{#    };#}
+{#{##}
+{#{#    document.getElementById('stop-recording').onclick = () => {#}
+{#{#        fetch('/stop-recording', { method: 'POST' })#}
+{#{#            .then(res => res.json())#}
+{#{#            .then(data => {#}
+{#{#                recording = false;#}
+{#{#                document.getElementById('recording-status').innerText = data.status;#}
+{#{#                updateButtonStates();#}
+{#{#            });#}
+{#{#    };#}
+{#{##}
+{#{#    document.getElementById('toggle-mode').onclick = () => {#}
+{#{#        glassesMode = !glassesMode;#}
+{#{#        fullscreenMode = false;#}
+{#{#        updateButtonStates();#}
+{#{##}
+{#{#        fetch('/set-vision-mode', {#}
+{#{#            method: 'POST',#}
+{#{#            headers: { 'Content-Type': 'application/json' },#}
+{#{#            body: JSON.stringify({ mode: glassesMode ? 'glasses' : 'none' })#}
+{#{#        });#}
+{#{##}
+{#{#        if (glassesMode) {#}
+{#{#            clearTimeout(toggleTimeout);#}
+{#{#            toggleTimeout = setTimeout(() => {#}
+{#{#                glassesMode = false;#}
+{#{#                updateButtonStates();#}
+{#{#                fetch('/set-vision-mode', {#}
+{#{#                    method: 'POST',#}
+{#{#                    headers: { 'Content-Type': 'application/json' },#}
+{#{#                    body: JSON.stringify({ mode: 'none' })#}
+{#{#                });#}
+{#{#            }, 30000);#}
+{#{#        }#}
+{#{#    };#}
+{#{##}
+{#{#    document.getElementById('toggle-fullscreen').onclick = () => {#}
+{#{#        fullscreenMode = !fullscreenMode;#}
+{#{#        glassesMode = false;#}
+{#{#        updateButtonStates();#}
+{#{##}
+{#{#        fetch('/set-vision-mode', {#}
+{#{#            method: 'POST',#}
+{#{#            headers: { 'Content-Type': 'application/json' },#}
+{#{#            body: JSON.stringify({ mode: fullscreenMode ? 'fullscreen' : 'none' })#}
+{#{#        });#}
+{#{##}
+{#{#        if (fullscreenMode) {#}
+{#{#            clearTimeout(fullscreenTimeout);#}
+{#{#            fullscreenTimeout = setTimeout(() => {#}
+{#{#                fullscreenMode = false;#}
+{#{#                updateButtonStates();#}
+{#{#                fetch('/set-vision-mode', {#}
+{#{#                    method: 'POST',#}
+{#{#                    headers: { 'Content-Type': 'application/json' },#}
+{#{#                    body: JSON.stringify({ mode: 'none' })#}
+{#{#                });#}
+{#{#            }, 60000);#}
+{#{#        }#}
+{#{#    };#}
+{#{##}
+{#{#    function computeBaseline(history) {#}
+{#{#        const baseline = Array(sensorDataLength).fill(0);#}
+{#{#        history.forEach(frame => {#}
+{#{#            frame.forEach((val, i) => baseline[i] += val);#}
+{#{#        });#}
+{#{#        return baseline.map(val => val / history.length);#}
+{#{#    }#}
+{#{##}
+{#{#    function normalizeUsingWindow(newFrame) {#}
+{#{#        if (sensorHistory.length >= windowSize) sensorHistory.shift();#}
+{#{#        sensorHistory.push(newFrame);#}
+{#{#        if (sensorHistory.length < windowSize) return Array(sensorDataLength).fill(0);#}
+{#{#        if (!baseline) baseline = computeBaseline(sensorHistory);#}
+{#{##}
+{#{#        return newFrame.map((val, i) => {#}
+{#{#            if (baseline[i] === 0) return 0;#}
+{#{#            let normalizedVal = (val - baseline[i]) / baseline[i];#}
+{#{#            return Math.max(-1, Math.min(normalizedVal * sensitivityFactor, 1));#}
+{#{#        });#}
+{#{#    }#}
+{#{##}
+{#{#    function updateStatus() {#}
+{#{#        fetch('/status')#}
+{#{#            .then(res => res.json())#}
+{#{#            .then(data => {#}
+{#{#                document.getElementById('stream_status').innerText = data.stream_status;#}
+{#{#                document.getElementById('last_frame_time').innerText = data.last_frame_time;#}
+{#{#            });#}
+{#{#    }#}
+{#{##}
+{#{#    function updateSensorData() {#}
+{#{#        fetch('/get-latest-sensor-data')#}
+{#{#            .then(res => res.json())#}
+{#{#            .then(data => {#}
+{#{#                document.getElementById('sensor_timestamp').innerText = data.timestamp || "-";#}
+{#{#                if (Array.isArray(data.data)) {#}
+{#{#                    const cleaned = data.data.map(Number).filter(n => !isNaN(n));#}
+{#{#                    if (cleaned.length === sensorDataLength) {#}
+{#{#                        const normalized = normalizeUsingWindow(cleaned);#}
+{#{#                        createOrUpdateChart(normalized);#}
+{#{#                    }#}
+{#{#                }#}
+{#{#            });#}
+{#{#    }#}
+{#{##}
+{#{#    function createOrUpdateChart(values) {#}
+{#{#        const ctx = document.getElementById('sensorChart').getContext('2d');#}
+{#{#        const labels = values.map((_, i) => `#${i + 1}`);#}
+{#{#        const data = {#}
+{#{#            labels: labels,#}
+{#{#            datasets: [{#}
+{#{#                label: 'Sensor Variations',#}
+{#{#                data: values,#}
+{#{#                backgroundColor: values.map(v => v >= 0 ? 'rgba(34, 197, 94, 0.7)' : 'rgba(239, 68, 68, 0.7)'),#}
+{#{#                borderColor: values.map(v => v >= 0 ? 'rgba(34, 197, 94, 1)' : 'rgba(239, 68, 68, 1)'),#}
+{#{#                borderWidth: 1#}
+{#{#            }]#}
+{#{#        };#}
+{#{##}
+{#{#        const config = {#}
+{#{#            type: 'bar',#}
+{#{#            data: data,#}
+{#{#            options: {#}
+{#{#                indexAxis: 'y',#}
+{#{#                responsive: true,#}
+{#{#                maintainAspectRatio: false,#}
+{#{#                scales: {#}
+{#{#                    x: {#}
+{#{#                        min: -1,#}
+{#{#                        max: 1,#}
+{#{#                        ticks: {#}
+{#{#                            stepSize: 0.1,#}
+{#{#                            callback: val => `${(val * 100).toFixed(0)}%`#}
+{#{#                        },#}
+{#{#                        grid: {#}
+{#{#                            drawBorder: true,#}
+{#{#                            color: ctx => ctx.tick.value === 0 ? '#000' : '#e5e7eb'#}
+{#{#                        }#}
+{#{#                    },#}
+{#{#                    y: {#}
+{#{#                        ticks: {#}
+{#{#                            autoSkip: false,#}
+{#{#                            callback: (value, index) => index % 2 === 0 ? value : ''#}
+{#{#                        }#}
+{#{#                    }#}
+{#{#                },#}
+{#{#                plugins: { legend: { display: false } },#}
+{#{#                elements: {#}
+{#{#                    bar: {#}
+{#{#                        barThickness: 'flex',#}
+{#{#                        categoryPercentage: 0.9,#}
+{#{#                        barPercentage: 0.9#}
+{#{#                    }#}
+{#{#                }#}
+{#{#            }#}
+{#{#        };#}
+{#{##}
+{#{#        if (sensorChart) {#}
+{#{#            sensorChart.options.animation = false;#}
+{#{#            sensorChart.data = data;#}
+{#{#            sensorChart.update();#}
+{#{#        } else {#}
+{#{#            sensorChart = new Chart(ctx, config);#}
+{#{#        }#}
+{#{#    }#}
+{#{##}
+{#{#    function updateMetrics() {#}
+{#{#        fetch('/metrics')#}
+{#{#            .then(res => res.json())#}
+{#{#            .then(data => {#}
+{#{#                document.getElementById('people_detected_today').innerText = data.people_detected_today;#}
+{#{#                document.getElementById('falls_box').innerText = data.falls_box;#}
+{#{#                document.getElementById('falls_pose').innerText = data.falls_pose;#}
+{#{#                document.getElementById('falls_bottom').innerText = data.falls_bottom;#}
+{#{#                document.getElementById('falls_full').innerText = data.falls_full;#}
+{#{#                document.getElementById('frames_processed').innerText = data.frames_processed;#}
+{#{#                document.getElementById('new_csv_rows_today').innerText = data.new_csv_rows_today;#}
+{#{#                document.getElementById('total_csv_rows').innerText = data.total_csv_rows;#}
+{#{#            });#}
+{#{#    }#}
+{#{##}
+{#{#    setInterval(updateStatus, 1000);#}
+{#{#    setInterval(updateSensorData, 1000);#}
+{#{#    setInterval(updateMetrics, 1000);#}
+{#{##}
+{#{#    updateButtonStates();#}
+{#{#    updateMetrics();#}
+{#{#    updateStatus();#}
+{#{#    updateSensorData();#}
+{#{#</script>#}
+{#{#</body>#}
+{#</html>}#}
+
 <!DOCTYPE html>
 <html lang="en">
 
@@ -9,7 +338,6 @@
 </head>
 
 <body class="bg-gray-100 min-h-screen text-[1.25rem] md:text-[1.5rem] leading-relaxed">
-    <!-- ASCII Art Header -->
     <div class="ascii-art text-center py-6">
         <pre class="text-2xl md:text-3xl font-mono text-gray-700 overflow-auto">
 ╔══════════════════════════════════════════════════════════════════════════════════╗
@@ -23,9 +351,7 @@
         </pre>
     </div>
 
-    <!-- Main Flex Container -->
     <div class="flex flex-col md:flex-row gap-6 px-6 pb-12 w-[75%] mx-auto">
-        <!-- Left: Video Feed -->
         <div class="flex-[2] bg-white rounded shadow p-6">
             <img src="{{ url_for('video_feed') }}" alt="Video Stream" class="w-full h-auto rounded">
             <div class="mt-4 text-center">
@@ -34,7 +360,6 @@
             </div>
         </div>
 
-        <!-- Right: Metrics on top, Chart below -->
         <div class="flex-[1] flex flex-col gap-6">
             <div class="bg-green-100 rounded shadow p-6">
                 <h2 class="text-2xl font-semibold mb-4 text-center">📈 Real-Time Metrics</h2>
@@ -60,7 +385,16 @@
         </div>
     </div>
 
-    <!-- Controls -->
+    <div class="px-6 pb-12 w-[75%] mx-auto">
+        <div class="bg-white rounded shadow p-6">
+            <h2 class="text-2xl font-semibold text-center mb-4">Temi's Location on Suite Map</h2>
+            <div id="map-container" style="position: relative; width: 100%; max-width: 800px; margin: auto;">
+                <img id="map-image" src="../static/map.png" alt="Temi Robot Map" style="width: 100%; height: auto; display: block; margin: auto;">
+                <div id="robot-dot" style="position: absolute; width: 10px; height: 10px; background-color: darkgreen; border-radius: 50%; transform: translate(-50%, -50%); display: none;"></div>
+            </div>
+        </div>
+    </div>
+
     <div class="w-full flex justify-center mb-12">
         <div class="bg-white p-6 rounded shadow text-center">
             <div class="flex flex-row justify-center items-center space-x-4">
@@ -214,19 +548,81 @@
     }
 
     function updateSensorData() {
-        fetch('/get-latest-sensor-data')
-            .then(res => res.json())
-            .then(data => {
-                document.getElementById('sensor_timestamp').innerText = data.timestamp || "-";
-                if (Array.isArray(data.data)) {
-                    const cleaned = data.data.map(Number).filter(n => !isNaN(n));
-                    if (cleaned.length === sensorDataLength) {
-                        const normalized = normalizeUsingWindow(cleaned);
-                        createOrUpdateChart(normalized);
-                    }
+    fetch('/get-latest-sensor-data')
+        .then(res => res.json())
+        .then(data => {
+            document.getElementById('sensor_timestamp').innerText = data.timestamp || "-";
+            if (Array.isArray(data.data)) {
+                const cleaned = data.data.map(Number).filter(n => !isNaN(n));
+                if (cleaned.length === sensorDataLength) {
+                    const normalized = normalizeUsingWindow(cleaned);
+                    createOrUpdateChart(normalized);
                 }
-            });
-    }
+            }
+
+            // Update robot position on map
+            if (data.current_position && typeof data.current_position.x === 'number' && typeof data.current_position.y === 'number') {
+                const robotMapCoordX_meters = data.current_position.x;
+                const robotMapCoordY_meters = data.current_position.y;
+
+                const mapImageElement = document.getElementById('map-image');
+                const robotDotElement = document.getElementById('robot-dot');
+
+                if (mapImageElement && robotDotElement && mapImageElement.clientWidth > 0 && mapImageElement.clientHeight > 0) {
+                    const imageDisplayWidthPx = mapImageElement.clientWidth;
+                    const imageDisplayHeightPx = mapImageElement.clientHeight;
+
+                    // Hardcoded values from Python
+                    const PY_ORIGIN_X_METERS = -12.779715;
+                    const PY_ORIGIN_Y_METERS = -10.486041;
+                    const PY_RESOLUTION_METERS_PER_PIXEL = 0.05;
+                    const PY_TOP_CROP_PIXELS = 100;
+                    const PY_LEFT_CROP_PIXELS = 20;
+
+                    // Compute pixel indices as in Python
+                    let i_px = Math.round((robotMapCoordX_meters - PY_ORIGIN_X_METERS) / PY_RESOLUTION_METERS_PER_PIXEL);
+                    let j_px = Math.round((robotMapCoordY_meters - PY_ORIGIN_Y_METERS) / PY_RESOLUTION_METERS_PER_PIXEL);
+
+
+                    // Adjust for cropping
+                    i_px -= PY_TOP_CROP_PIXELS;
+                    j_px -= PY_LEFT_CROP_PIXELS;
+
+                    console.log(`Computed Pixels: i_px=${i_px}, j_px=${j_px}`);
+
+                    // The image may be scaled in display; use the real image size (naturalWidth, naturalHeight)
+                    const CROPPED_ROWS = 407;
+                    const CROPPED_COLS = 1221;
+
+                    // Scale from real pixels to display pixels
+                    const scaleX = imageDisplayWidthPx / CROPPED_COLS;
+                    const scaleY = imageDisplayHeightPx / CROPPED_ROWS;
+
+                    const displayX = j_px * scaleX;
+                    const displayY = i_px * scaleY;
+
+                    // Position the dot
+                    robotDotElement.style.left = `${displayX}px`;
+                    robotDotElement.style.top = `${displayY}px`;
+                    robotDotElement.style.display = 'block';
+
+                }
+            } else {
+                const robotDotElement = document.getElementById('robot-dot');
+                if (robotDotElement) {
+                    robotDotElement.style.display = 'none';
+                }
+            }
+        })
+        .catch(error => {
+            console.error("Error fetching or processing sensor data:", error);
+            const robotDotElement = document.getElementById('robot-dot');
+            if (robotDotElement) {
+                robotDotElement.style.display = 'none';
+            }
+        });
+}
+
 
     function createOrUpdateChart(values) {
         const ctx = document.getElementById('sensorChart').getContext('2d');
@@ -305,13 +701,13 @@
     }
 
     setInterval(updateStatus, 1000);
-    setInterval(updateSensorData, 1000);
+    setInterval(updateSensorData, 1000); // This will now also update the map dot
     setInterval(updateMetrics, 1000);
 
     updateButtonStates();
     updateMetrics();
     updateStatus();
-    updateSensorData();
+    updateSensorData(); // Initial call to populate data, including map dot if available
 </script>
 </body>
 </html>

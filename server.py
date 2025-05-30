@@ -118,43 +118,61 @@ async def create_peer_connection():
         logger.info(f"📡 DataChannel received: {channel.label}")
 
         @channel.on("message")
-        def on_message(message):
-            global last_should_record  # Reference the outer variable
+        def on_message(message_str):  # Renamed to message_str to avoid conflict
+            global last_should_record  # Reference the outer global variable
+            global latest_sensor_data  # Reference the global sensor data store
 
             try:
-                # Assume JSON string with 'sensor_data' and 'should_record' flag
-                data = json.loads(message)
-                sensor_data = data.get('values')
-                should_record = data.get('should_record', False)
-
+                data_payload = json.loads(message_str)
                 timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-                latest_sensor_data['data'] = sensor_data
-                latest_sensor_data['timestamp'] = timestamp
-                latest_sensor_data['should_record'] = should_record
+                # Assume the client might send sensor values, recording flag, and position
+                # independently or combined.
 
-                logger.info(f"[{timestamp}] DataChannel sensor data: {sensor_data}, Record flag: {should_record}")
+                # Handling sensor values and should_record flag
+                if 'values' in data_payload:
+                    sensor_values = data_payload.get('values')
+                    should_record_from_payload = data_payload.get('should_record', False)
 
-                # Check if state changed from False to True
-                if not last_should_record and should_record:
-                    increment("record_triggers_today")
+                    latest_sensor_data['data'] = sensor_values
+                    latest_sensor_data['should_record'] = should_record_from_payload
+                    # Update timestamp if sensor data is present
+                    latest_sensor_data['timestamp'] = timestamp
 
-                # Record to CSV if flag is True
-                if should_record:
-                    record_sensor_data_to_csv(sensor_data, timestamp)
+                    logger.info(
+                        f"[{timestamp}] DataChannel: Received sensor data. Record flag: {should_record_from_payload}")
+                    # logger.debug(f"Sensor values: {sensor_values}") # Keep this for debugging if needed
 
-                # Update the last_should_record value for the next message
-                last_should_record = should_record
+                    # Check if recording state changed from False to True for sensor data
+                    if not last_should_record and should_record_from_payload:
+                        increment("record_triggers_today")  # Metric for sensor data recording triggers
 
+                    # Record sensor values to CSV if flag is True
+                    if should_record_from_payload:
+                        record_sensor_data_to_csv(sensor_values, timestamp)
+
+                    last_should_record = should_record_from_payload
+
+                # Handling current_position
+                if 'current_position' in data_payload:
+                    new_position = data_payload.get('current_position')
+                    latest_sensor_data['current_position'] = new_position
+                #     don't update timestamp, because we don't want a new row in the csv file
+
+                # If message contains neither, log a warning
+                if 'values' not in data_payload and 'current_position' not in data_payload:
+                    logger.warning(
+                        f"[{timestamp}] DataChannel: Received message with no 'values' or 'current_position' fields: {data_payload}")
+
+
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to decode DataChannel JSON message: {message_str}. Error: {e}")
             except Exception as e:
                 logger.error(f"Failed to process DataChannel message: {e}")
 
-
     pcs.add(peer)
-    
-    #REPORT: increment every webrtc connection
-    increment("webrtc_connections")
 
+    increment("webrtc_connections")
     return peer
 
 async def offer(request):
@@ -223,7 +241,7 @@ def index():
     else:
         if last_pts is None:
             stream_status = "Live"
-        elif freeze_detected_time and (duplicate_frame_count > duplicate_threshold or 
+        elif freeze_detected_time and (duplicate_frame_count > duplicate_threshold or
                                       current_time - freeze_detected_time > freeze_threshold):
             stream_status = "Frozen"
         else:
@@ -259,12 +277,12 @@ def get_status():
     else:
         if last_pts is None:
             stream_status = "Live"
-        elif freeze_detected_time and (duplicate_frame_count > duplicate_threshold or 
+        elif freeze_detected_time and (duplicate_frame_count > duplicate_threshold or
                                       current_time - freeze_detected_time > freeze_threshold):
             stream_status = "Frozen"
         else:
             stream_status = "Live"
-    
+
     #REPORT: increment every api call
     increment("http_api_calls")
 
@@ -272,13 +290,13 @@ def get_status():
 
 @flask_app.route('/video_feed')
 def video_feed():
-    #REPORT: increment every api call     
+    #REPORT: increment every api call
     increment("http_api_calls")
 
     return Response(gen_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 # Global variable to hold latest sensor data
-latest_sensor_data = {"data": None, "timestamp": None}
+latest_sensor_data = {"data": None, "timestamp": None, "should_record": False, "current_position": None}
 
 @flask_app.route('/sensor-data', methods=['POST'])
 def sensor_data():
@@ -286,28 +304,28 @@ def sensor_data():
     data = request.json.get('sensor_data')
     should_record = request.json.get('should_record', False)
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    
+    current_position = request.json.get('current_position', None)
+
     latest_sensor_data = {
-        "data": data, 
+        "data": data,
         "timestamp": timestamp,
-        "should_record": should_record
+        "should_record": should_record,
+        "current_position": current_position
     }
-    print(f"[{timestamp}] Received sensor data: {data}, Record flag: {should_record}")
-    
+
     # # Record to CSV if flag is True
     # if should_record:                                 <------ Rest API version to record data from another source
     #     record_sensor_data_to_csv(data, timestamp)
-    
-    #REPORT: increment every api call      
-    increment("http_api_calls")
-    
-    return jsonify({"status": "Sensor data received"}), 200
 
-@flask_app.route('/get-latest-sensor-data', methods=['GET'])
-def get_latest_sensor_data():   
     #REPORT: increment every api call
     increment("http_api_calls")
 
+    return jsonify({"status": "Sensor data received"}), 200
+
+@flask_app.route('/get-latest-sensor-data', methods=['GET'])
+def get_latest_sensor_data():
+    #REPORT: increment every api call
+    increment("http_api_calls")
     return jsonify(latest_sensor_data), 200
 
 # Additional imports for recording
@@ -318,17 +336,17 @@ record_lock = threading.Lock()
 @flask_app.route('/start-recording', methods=['POST'])
 def start_recording():
     global video_writer, recording
-    
+
     with record_lock:
         if recording:
             return jsonify({'status': 'already recording'}), 200
-        
+
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         filename = f"Temi_VODs/recorded_video_{timestamp}.mp4"
         video_writer = cv2.VideoWriter(filename, fourcc, 12.0, (640, 480)) # changed to 12 fps
         recording = True
-        
+
     #REPORT: increment every api call
     increment("http_api_calls")
 
@@ -341,11 +359,11 @@ def stop_recording():
     with record_lock:
         if not recording:
             return jsonify({'status': 'not recording'}), 200
-        
+
         recording = False
         video_writer.release()
         video_writer = None
-        
+
     #REPORT: increment every api call
     increment("http_api_calls")
 
@@ -398,7 +416,7 @@ def gen_frames():
         if isinstance(frame, bytes) or frame is None:
             current_state = "frozen"
         elif freeze_detected_time and (
-            duplicate_frame_count > duplicate_threshold or 
+            duplicate_frame_count > duplicate_threshold or
             time.time() - freeze_detected_time > freeze_threshold):
             current_state = "offline"
 
@@ -553,7 +571,7 @@ def record_sensor_data_to_csv(sensor_data, timestamp):
 
         else:
             logger.warning(f"Unexpected sensor data format: {type(sensor_data)}. Data not saved.")
-  
+
 
 
 # -------- Main Execution ----------
@@ -563,9 +581,9 @@ if __name__ == "__main__":
         daemon=True
     )
     flask_thread.start()
-    
+
     # Initial metrics update on startup
-    update_csv_metrics()    
+    update_csv_metrics()
 
 
     async def aiohttp_main():
@@ -576,7 +594,7 @@ if __name__ == "__main__":
         logger.info("🚀 aiohttp signaling server started on http://0.0.0.0:5432")
         while True:
             await asyncio.sleep(3600)
-            
+
     schedule_daily_report()        # then run report after embeddings are ready
 
     asyncio.run(aiohttp_main())
