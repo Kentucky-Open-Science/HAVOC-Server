@@ -298,105 +298,68 @@
 
 
     function createOrUpdateChart(values) {
-    const ctx = document.getElementById('sensorChart').getContext('2d');
-    // Generate much longer labels
-    const labels = values.map((_, i) => `This is a significantly longer descriptive label for data point #${i + 1} which demonstrates long text handling`);
+        const ctx = document.getElementById('sensorChart').getContext('2d');
 
-    const data = {
-        labels: labels,
-        datasets: [{
-            label: 'Sensor Variations',
-            data: values,
-            backgroundColor: values.map(v => v >= 0 ? 'rgba(34, 197, 94, 0.7)' : 'rgba(239, 68, 68, 0.7)'),
-            borderColor: values.map(v => v >= 0 ? 'rgba(34, 197, 94, 1)' : 'rgba(239, 68, 68, 1)'),
-            borderWidth: 1
-        }]
-    };
+        // Updated labels to be more descriptive
+        const labels = values.map((_, i) => `Sensor Reading Number ${i + 1} (Sample Point)`);
 
-    const config = {
-        type: 'bar',
-        data: data,
-        options: {
-            // Switch indexAxis to 'x' for vertical bars (categories on X-axis, values on Y-axis)
-            indexAxis: 'x',
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                // Configuration for the X-axis (formerly Y-axis for labels)
-                x: {
-                    ticks: {
-                        autoSkip: false, // You might want to adjust this with very long labels
-                        callback: (value, index) => {
-                            // 'value' here is the numerical index of the label
-                            // 'this.getLabelForValue(value)' gets the actual label string
-                            const label = this.getLabelForValue(value);
-                            // Example: Show every other label, or implement more complex logic
-                            // For very long labels, rotation might be needed or fewer labels shown
-                            return index % 2 === 0 ? label : '';
-                            // If labels are too long and overlap, consider rotating them:
-                            // maxRotation: 90,
-                            // minRotation: 45
+        const data = {
+            labels: labels,
+            datasets: [{
+                label: 'Sensor Variations',
+                data: values,
+                backgroundColor: values.map(v => v >= 0 ? 'rgba(34, 197, 94, 0.7)' : 'rgba(239, 68, 68, 0.7)'),
+                borderColor: values.map(v => v >= 0 ? 'rgba(34, 197, 94, 1)' : 'rgba(239, 68, 68, 1)'),
+                borderWidth: 1
+            }]
+        };
+
+        const config = {
+            type: 'bar',
+            data: data,
+            options: {
+                indexAxis: 'x', // Switched from 'y' to 'x' to rotate the chart
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { // Now y-axis represents the values
+                        min: -1,
+                        max: 1,
+                        ticks: {
+                            stepSize: 0.1,
+                            callback: val => `${(val * 100).toFixed(0)}%`
+                        },
+                        grid: {
+                            drawBorder: true,
+                            color: ctx => ctx.tick.value === 0 ? '#000' : '#e5e7eb'
                         }
                     },
-                    grid: {
-                        // No specific grid changes needed for x-axis unless desired
-                    }
-                },
-                // Configuration for the Y-axis (formerly X-axis for values)
-                y: {
-                    min: -1,
-                    max: 1,
-                    ticks: {
-                        stepSize: 0.1,
-                        callback: val => `${(val * 100).toFixed(0)}%`
-                    },
-                    grid: {
-                        drawBorder: true,
-                        color: context => context.tick.value === 0 ? '#000' : '#e5e7eb' // Corrected access to context
-                    }
-                }
-            },
-            plugins: {
-                legend: {
-                    display: false
-                },
-                // Tooltips might need adjustment if labels are very long
-                tooltip: {
-                    callbacks: {
-                        title: function(tooltipItems) {
-                            // To show the full long label in the tooltip title
-                            if (tooltipItems.length > 0) {
-                                return labels[tooltipItems[0].dataIndex];
-                            }
-                            return '';
+                    x: { // Now x-axis represents the labels
+                        ticks: {
+                            autoSkip: false,
+                            callback: (value, index) => index % 2 === 0 ? value : ''
                         }
                     }
-                }
-            },
-            elements: {
-                bar: {
-                    barThickness: 'flex', // For vertical bars, you might not need this or adjust it
-                    categoryPercentage: 0.9,
-                    barPercentage: 0.9
+                },
+                plugins: { legend: { display: false } },
+                elements: {
+                    bar: {
+                        barThickness: 'flex',
+                        categoryPercentage: 0.9,
+                        barPercentage: 0.9
+                    }
                 }
             }
+        };
+
+        if (sensorChart) {
+            sensorChart.options.animation = false;
+            sensorChart.data = data;
+            sensorChart.update();
+        } else {
+            sensorChart = new Chart(ctx, config);
         }
-    };
-
-    // Ensure sensorChart is declared in a scope accessible here (e.g., globally or passed in)
-    // let sensorChart; // Example: declare it if not already done elsewhere
-
-    if (typeof sensorChart !== 'undefined' && sensorChart) {
-        // Preserve animation setting if you want to disable it only on updates, not initial creation
-        // sensorChart.options.animation = false; // Or manage it based on specific needs
-        sensorChart.data = data;
-        // Important: Update options as well if they can change, especially scales
-        sensorChart.options = config.options;
-        sensorChart.update();
-    } else {
-        sensorChart = new Chart(ctx, config);
     }
-}
 
     {#function createOrUpdateChart(values) {#}
     {#    const ctx = document.getElementById('sensorChart').getContext('2d');#}
