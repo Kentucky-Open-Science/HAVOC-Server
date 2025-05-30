@@ -24,7 +24,7 @@
     <div class="flex flex-col md:flex-row gap-8 px-8 flex-grow">
         <!-- Left Section: Video and Buttons -->
         <div class="w-full md:w-1/2 flex flex-col">
-            <div class="bg-gray-100 border-2 border-blue-800 rounded shadow p-8 flex-grow">
+            <div class="bg-gray-100 border-2 border-blue-800 rounded shadow p-8">
                 <img src="{{ url_for('video_feed') }}" alt="Video Stream" class="w-full h-[70vh] object-contain rounded">
                 <div class="mt-6 text-center">
                     <p class="text-6xl">Stream: <span id="stream_status">{{ stream_status }}</span></p>
@@ -55,7 +55,7 @@
             </div>
 
             <!-- Metrics and Sensor Plot -->
-            <div class="flex flex-col gap-8">
+            <div class="flex flex-col gap-8 flex-grow">
                 <div class="bg-gray-100 border-2 border-blue-800 rounded shadow p-8">
                     <h2 class="text-6xl font-semibold mb-6 text-center">📈 Real-Time Metrics</h2>
                     <div id="metrics-display" class="grid grid-cols-4 gap-x-6 gap-y-4 text-4xl text-gray-800">
