@@ -7,9 +7,9 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
-<body class="bg-blue-900 min-h-screen text-[1.25rem] md:text-[1.5rem] leading-relaxed flex flex-col">
-    <div class="ascii-art text-center py-6">
-        <pre class="text-lg md:text-xl font-mono text-gray-100 overflow-auto">
+<body class="bg-blue-850 min-h-screen text-[2rem] md:text-[2.5rem] leading-relaxed flex flex-col">
+    <div class="ascii-art text-center py-8">
+        <pre class="text-4xl md:text-5xl font-mono text-gray-100 overflow-auto">
 ╔══════════════════════════════════════════════════════════════════════════════════╗
 ║  ████████╗███████╗███╗   ███╗██╗    ██████╗  ██████╗ ██████╗  ██████╗ ████████╗  ║
 ║  ╚══██╔══╝██╔════╝████╗ ████║██║    ██╔══██╗██╔═══██╗██╔══██╗██╔═══██╗╚══██╔══╝  ║
@@ -21,45 +21,45 @@
         </pre>
     </div>
 
-    <div class="flex flex-col md:flex-row gap-6 px-6 flex-grow">
+    <div class="flex flex-col md:flex-row gap-8 px-8 flex-grow">
         <!-- Left Section: Video and Buttons -->
         <div class="w-full md:w-1/2 flex flex-col">
-            <div class="bg-gray-100 border-2 border-blue-800 rounded shadow p-6 flex-grow">
-                <img src="{{ url_for('video_feed') }}" alt="Video Stream" class="w-full h-[65vh] object-contain rounded">
-                <div class="mt-4 text-center">
-{#                    <p class="text-xl">Stream: <span id="stream_status">{{ stream_status }}</span></p>#}
-                    <p class="text-lg text-gray-600">Last Frame: <span id="last_frame_time">{{ last_frame_time }}</span></p>
+            <div class="bg-gray-100 border-2 border-blue-800 rounded shadow p-8 flex-grow">
+                <img src="{{ url_for('video_feed') }}" alt="Video Stream" class="w-full h-[70vh] object-contain rounded">
+                <div class="mt-6 text-center">
+                    <p class="text-3xl">Stream: <span id="stream_status">{{ stream_status }}</span></p>
+                    <p class="text-2xl text-gray-600">Last Frame: <span id="last_frame_time">{{ last_frame_time }}</span></p>
                 </div>
-                <div class="w-full flex justify-center mb-6 mt-4">
-                    <div class="bg-gray-100 border-2 border-blue-800 p-2 rounded shadow text-center">
-                        <div class="flex flex-row justify-center items-center space-x-2">
-                            <button id="start-recording" class="bg-green-500 text-white text-sm px-3 py-1 rounded hover:bg-green-600">Start Recording</button>
-                            <button id="stop-recording" class="bg-red-500 text-white text-sm px-3 py-1 rounded hover:bg-red-600">Stop Recording</button>
-                            <button id="toggle-mode" class="bg-blue-500 text-white text-sm px-3 py-1 rounded shadow hover:bg-blue-600">Glasses</button>
-                            <button id="toggle-fullscreen" class="bg-purple-500 text-white text-sm px-3 py-1 rounded shadow hover:bg-purple-600">Fullscreen</button>
+                <div class="w-full flex justify-center mb-8 mt-6">
+                    <div class="bg-gray-100 border-2 border-blue-800 p-4 rounded shadow text-center">
+                        <div class="flex flex-row justify-center items-center space-x-4">
+                            <button id="start-recording" class="bg-green-500 text-white text-xl px-4 py-2 rounded hover:bg-green-600">Start Recording</button>
+                            <button id="stop-recording" class="bg-red-500 text-white text-xl px-4 py-2 rounded hover:bg-red-600">Stop Recording</button>
+                            <button id="toggle-mode" class="bg-blue-500 text-white text-xl px-4 py-2 rounded shadow hover:bg-blue-600">Glasses</button>
+                            <button id="toggle-fullscreen" class="bg-purple-500 text-white text-xl px-4 py-2 rounded shadow hover:bg-purple-600">Fullscreen</button>
                         </div>
-                        <p id="recording-status" class="mt-2 text-sm text-gray-700">Not recording.</p>
+                        <p id="recording-status" class="mt-4 text-xl text-gray-700">Not recording.</p>
                     </div>
                 </div>
             </div>
         </div>
 
         <!-- Right Section: Map, Metrics, and Sensor Plot -->
-        <div class="w-full md:w-1/2 flex flex-col gap-6">
+        <div class="w-full md:w-1/2 flex flex-col gap-8">
             <!-- Map Section -->
-            <div class="bg-gray-100 border-2 border-blue-800 rounded shadow p-6">
-                <h2 class="text-2xl font-semibold text-center mb-4">Temi's Location on Suite Map</h2>
-                <div id="map-container" style="position: relative; width: 100%; max-width: 800px; margin: auto;">
+            <div class="bg-gray-100 border-2 border-blue-800 rounded shadow p-8">
+                <h2 class="text-4xl font-semibold text-center mb-6">Temi's Location on Suite Map</h2>
+                <div id="map-container" style="position: relative; width: 100%; max-width: 1200px; margin: auto;">
                     <img id="map-image" src="../static/map.png" alt="Temi Robot Map" style="width: 100%; height: auto; display: block; margin: auto;">
-                    <div id="robot-dot" style="position: absolute; width: 10px; height: 10px; background-color: darkgreen; border-radius: 50%; transform: translate(-50%, -50%); display: none;"></div>
+                    <div id="robot-dot" style="position: absolute; width: 20px; height: 20px; background-color: darkgreen; border-radius: 50%; transform: translate(-50%, -50%); display: none;"></div>
                 </div>
             </div>
 
             <!-- Metrics and Sensor Plot -->
-            <div class="flex flex-col gap-6">
-                <div class="bg-gray-100 border-2 border-blue-800 rounded shadow p-6">
-                    <h2 class="text-xl font-semibold mb-4 text-center">📈 Real-Time Metrics</h2>
-                    <div id="metrics-display" class="grid grid-cols-2 gap-x-4 gap-y-2 text-base text-gray-800">
+            <div class="flex flex-col gap-8">
+                <div class="bg-gray-100 border-2 border-blue-800 rounded shadow p-8">
+                    <h2 class="text-3xl font-semibold mb-6 text-center">📈 Real-Time Metrics</h2>
+                    <div id="metrics-display" class="grid grid-cols-2 gap-x-6 gap-y-4 text-2xl text-gray-800">
                         <p><strong>People Detected Today:</strong> <span id="people_detected_today">-</span></p>
                         <p><strong>Falls (Box):</strong> <span id="falls_box">-</span></p>
                         <p><strong>Falls (Pose):</strong> <span id="falls_pose">-</span></p>
@@ -70,9 +70,9 @@
                         <p><strong>Total Smells:</strong> <span id="total_csv_rows">-</span></p>
                     </div>
                 </div>
-                <div class="bg-gray-100 border-2 border-blue-800 rounded shadow p-6 flex flex-col flex-grow">
-                    <h2 class="text-xl font-semibold text-center">Smell Sensor Fluctuations Based on Moving Average (100x)</h2>
-                    <p class="text-base text-gray-600 text-center mb-4">Timestamp: <span id="sensor_timestamp">-</span></p>
+                <div class="bg-gray-100 border-2 border-blue-800 rounded shadow p-8 flex flex-col flex-grow">
+                    <h2 class="text-3xl font-semibold text-center">Smell Sensor Fluctuations Based on Moving Average (100x)</h2>
+                    <p class="text-2xl text-gray-600 text-center mb-6">Timestamp: <span id="sensor_timestamp">-</span></p>
                     <div class="flex-grow overflow-hidden">
                         <canvas id="sensorChart" class="w-full h-full"></canvas>
                     </div>
