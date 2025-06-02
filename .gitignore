@@ -4,6 +4,7 @@ codec_errors.log
 __pycache__/
 .env
 Temi_Sensor_Data/sensor_data_master.csv
+Temi_Sensor_Data/frames/
 Temi_VODs/
 embeddings
 visualizations
