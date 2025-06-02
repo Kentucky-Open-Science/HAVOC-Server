@@ -357,66 +357,6 @@
         }
     }
 
-    {#function createOrUpdateChart(values) {#}
-    {#    const ctx = document.getElementById('sensorChart').getContext('2d');#}
-    {#    const labels = values.map((_, i) => `#${i + 1}`);#}
-    {#    const data = {#}
-    {#        labels: labels,#}
-    {#        datasets: [{#}
-    {#            label: 'Sensor Variations',#}
-    {#            data: values,#}
-    {#            backgroundColor: values.map(v => v >= 0 ? 'rgba(34, 197, 94, 0.7)' : 'rgba(239, 68, 68, 0.7)'),#}
-    {#            borderColor: values.map(v => v >= 0 ? 'rgba(34, 197, 94, 1)' : 'rgba(239, 68, 68, 1)'),#}
-    {#            borderWidth: 1#}
-    {#        }]#}
-    {#    };#}
-    {##}
-    {#    const config = {#}
-    {#        type: 'bar',#}
-    {#        data: data,#}
-    {#        options: {#}
-    {#            indexAxis: 'y',#}
-    {#            responsive: true,#}
-    {#            maintainAspectRatio: false,#}
-    {#            scales: {#}
-    {#                x: {#}
-    {#                    min: -1,#}
-    {#                    max: 1,#}
-    {#                    ticks: {#}
-    {#                        stepSize: 0.1,#}
-    {#                        callback: val => `${(val * 100).toFixed(0)}%`#}
-    {#                    },#}
-    {#                    grid: {#}
-    {#                        drawBorder: true,#}
-    {#                        color: ctx => ctx.tick.value === 0 ? '#000' : '#e5e7eb'#}
-    {#                    }#}
-    {#                },#}
-    {#                y: {#}
-    {#                    ticks: {#}
-    {#                        autoSkip: false,#}
-    {#                        callback: (value, index) => index % 2 === 0 ? value : ''#}
-    {#                    }#}
-    {#                }#}
-    {#            },#}
-    {#            plugins: { legend: { display: false } },#}
-    {#            elements: {#}
-    {#                bar: {#}
-    {#                    barThickness: 'flex',#}
-    {#                    categoryPercentage: 0.9,#}
-    {#                    barPercentage: 0.9#}
-    {#                }#}
-    {#            }#}
-    {#        }#}
-    {#    };#}
-    {##}
-    {#    if (sensorChart) {#}
-    {#        sensorChart.options.animation = false;#}
-    {#        sensorChart.data = data;#}
-    {#        sensorChart.update();#}
-    {#    } else {#}
-    {#        sensorChart = new Chart(ctx, config);#}
-    {#    }#}
-    {#}#}
 
     function updateMetrics() {
         fetch('/metrics')
