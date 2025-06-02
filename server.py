@@ -147,19 +147,45 @@ async def create_peer_connection():
                     if not last_should_record and should_record_from_payload:
                         increment("record_triggers_today")  # Metric for sensor data recording triggers
 
+                    x_position = None
+                    y_position = None
+                    if 'current_position' in data_payload and isinstance(data_payload['current_position'], dict):
+                        x_position = data_payload['current_position'].get('x')
+                        y_position = data_payload['current_position'].get('y')
+
+                    frame_filename = None
+                    if should_record_from_payload and frame_holder['frame'] is not None and not isinstance(
+                            frame_holder['frame'], bytes):
+                        # Save the most recent frame
+                        image_dir = os.path.join("Temi_Sensor_Data", "frames")
+                        os.makedirs(image_dir, exist_ok=True)
+                        frame_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')[:-3]  # Milliseconds
+                        frame_filename = f"frame_{frame_timestamp}.jpg"
+                        frame_path = os.path.join(image_dir, frame_filename)
+                        try:
+                            img_to_save = frame_holder['frame'].to_ndarray(format="bgr24")
+                            cv2.imwrite(frame_path, img_to_save)
+                            logger.info(f"Saved frame: {frame_path}")
+                        except Exception as e:
+                            logger.error(f"Error saving frame: {e}")
+                            frame_filename = None  # Reset filename if saving failed
+
+                    latest_sensor_data['frame_filename'] = frame_filename  # Store the filename
+
                     # Record sensor values to CSV if flag is True
                     if should_record_from_payload:
-                        record_sensor_data_to_csv(sensor_values, timestamp)
+                        record_sensor_data_to_csv(sensor_values, timestamp, x_position, y_position,
+                                                  frame_filename)  # Pass x_position, y_position, and frame_filename
 
                     last_should_record = should_record_from_payload
 
-                # Handling current_position
+                    # Handling current_position
                 if 'current_position' in data_payload:
                     new_position = data_payload.get('current_position')
                     latest_sensor_data['current_position'] = new_position
-                #     don't update timestamp, because we don't want a new row in the csv file
+                    #     don't update timestamp, because we don't want a new row in the csv file
 
-                # If message contains neither, log a warning
+                    # If message contains neither, log a warning
                 if 'values' not in data_payload and 'current_position' not in data_payload:
                     logger.warning(
                         f"[{timestamp}] DataChannel: Received message with no 'values' or 'current_position' fields: {data_payload}")
@@ -296,31 +322,56 @@ def video_feed():
     return Response(gen_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 # Global variable to hold latest sensor data
-latest_sensor_data = {"data": None, "timestamp": None, "should_record": False, "current_position": None}
+latest_sensor_data = {"data": None, "timestamp": None, "should_record": False, "current_position": None, "frame_filename": None}
 
-@flask_app.route('/sensor-data', methods=['POST'])
-def sensor_data():
-    global latest_sensor_data
-    data = request.json.get('sensor_data')
-    should_record = request.json.get('should_record', False)
-    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    current_position = request.json.get('current_position', None)
-
-    latest_sensor_data = {
-        "data": data,
-        "timestamp": timestamp,
-        "should_record": should_record,
-        "current_position": current_position
-    }
-
-    # # Record to CSV if flag is True
-    # if should_record:                                 <------ Rest API version to record data from another source
-    #     record_sensor_data_to_csv(data, timestamp)
-
-    #REPORT: increment every api call
-    increment("http_api_calls")
-
-    return jsonify({"status": "Sensor data received"}), 200
+# Alternative endpoint to receive sensor data from the Temi robot, not used in the current setup
+# @flask_app.route('/sensor-data', methods=['POST'])
+# def sensor_data():
+#     global latest_sensor_data
+#     data = request.json.get('sensor_data')
+#     should_record = request.json.get('should_record', False)
+#     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+#     current_position = request.json.get('current_position', None)
+#
+#     x_position = None
+#     y_position = None
+#     if current_position and isinstance(current_position, dict):
+#         x_position = current_position.get('x')
+#         y_position = current_position.get('y')
+#
+#     frame_filename = None
+#     if should_record and frame_holder['frame'] is not None and not isinstance(frame_holder['frame'], bytes):
+#         # Save the most recent frame
+#         image_dir = os.path.join("Temi_Sensor_Data", "frames")
+#         os.makedirs(image_dir, exist_ok=True)
+#         frame_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')[:-3]  # Milliseconds
+#         frame_filename = f"frame_{frame_timestamp}.jpg"
+#         frame_path = os.path.join(image_dir, frame_filename)
+#         try:
+#             img_to_save = frame_holder['frame'].to_ndarray(format="bgr24")
+#             cv2.imwrite(frame_path, img_to_save)
+#             logger.info(f"Saved frame: {frame_path}")
+#         except Exception as e:
+#             logger.error(f"Error saving frame: {e}")
+#             frame_filename = None  # Reset filename if saving failed
+#
+#
+#     latest_sensor_data = {
+#         "data": data,
+#         "timestamp": timestamp,
+#         "should_record": should_record,
+#         "current_position": current_position,
+#         "frame_filename": frame_filename
+#     }
+#
+#     # # Record to CSV if flag is True
+#     # if should_record:                                 <------ Rest API version to record data from another source
+#     #     record_sensor_data_to_csv(data, timestamp)
+#
+#     #REPORT: increment every api call
+#     increment("http_api_calls")
+#
+#     return jsonify({"status": "Sensor data received"}), 200
 
 @flask_app.route('/get-latest-sensor-data', methods=['GET'])
 def get_latest_sensor_data():
@@ -520,7 +571,7 @@ import csv
 import os
 from datetime import datetime
 
-def record_sensor_data_to_csv(sensor_data, timestamp):
+def record_sensor_data_to_csv(sensor_data, timestamp, x_position=None, y_position=None, frame_filename=None):
     """Record sensor data to a master CSV file for long-term accumulation"""
     if not sensor_data:
         return
@@ -544,9 +595,9 @@ def record_sensor_data_to_csv(sensor_data, timestamp):
             writer = csv.writer(csvfile)
 
             if not file_exists:
-                writer.writerow(['timestamp'] + [f'value_{i}' for i in range(66)])
+                writer.writerow(['timestamp'] + [f'value_{i}' for i in range(66)] + ['x_position', 'y_position', 'frame_filename'])
 
-            writer.writerow([timestamp] + sensor_data)
+            writer.writerow([timestamp] + sensor_data + [x_position, y_position, frame_filename])
 
             # increment("new_csv_rows_today")
             update_csv_metrics()
@@ -556,7 +607,7 @@ def record_sensor_data_to_csv(sensor_data, timestamp):
                 logger.warning(f"Invalid sensor data length (dict): {len(sensor_data)} (expected 66). Data not saved.")
                 return  # Skip saving invalid data
 
-            fieldnames = ['timestamp'] + list(sensor_data.keys())
+            fieldnames = ['timestamp'] + list(sensor_data.keys()) + ['x_position', 'y_position', 'frame_filename']
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 
             if not file_exists:
@@ -564,6 +615,9 @@ def record_sensor_data_to_csv(sensor_data, timestamp):
 
             row_data = sensor_data.copy()
             row_data['timestamp'] = timestamp
+            row_data['x_position'] = x_position
+            row_data['y_position'] = y_position
+            row_data['frame_filename'] = frame_filename
             writer.writerow(row_data)
 
             # increment("new_csv_rows_today")
