@@ -22,63 +22,59 @@
     </div>
 
     <div class="flex flex-col md:flex-row gap-8 px-8 flex-grow">
-        <!-- Left Section: Video and Buttons -->
-        <div class="w-full md:w-1/2 flex flex-col">
-            <div class="bg-gray-100 border-2 border-blue-800 rounded shadow p-8 flex-grow">
-                <img src="{{ url_for('video_feed') }}" alt="Video Stream" class="w-full h-[70vh] object-contain rounded">
-                <div class="mt-6 text-center">
-                    <p class="text-6xl">Stream: <span id="stream_status">{{ stream_status }}</span></p>
-                    <p class="text-5xl text-gray-600">Last Frame: <span id="last_frame_time">{{ last_frame_time }}</span></p>
-                </div>
-                <div class="w-full flex justify-center mb-8 mt-6">
-                    <div class="bg-gray-100 p-4 rounded shadow text-center">
-                        <div class="flex flex-row justify-center items-center space-x-4">
-                            <button id="start-recording" class="bg-green-500 text-white text-6xl px-4 py-2 rounded hover:bg-green-600">Start Recording</button>
-                            <button id="stop-recording" class="bg-red-500 text-white text-6xl px-4 py-2 rounded hover:bg-red-600">Stop Recording</button>
-                            <button id="toggle-mode" class="bg-blue-500 text-white text-6xl px-4 py-2 rounded shadow hover:bg-blue-600">Glasses</button>
-                            <button id="toggle-fullscreen" class="bg-purple-500 text-white text-6xl px-4 py-2 rounded shadow hover:bg-purple-600">Fullscreen</button>
-                        </div>
-                    </div>
-                </div>
+    <div class="w-full md:w-1/2 flex flex-col">
+        <div class="bg-gray-100 border-2 border-blue-800 rounded shadow p-8">
+            <img src="{{ url_for('video_feed') }}" alt="Video Stream" class="w-full h-[70vh] object-contain rounded">
+            <div class="mt-6 text-center">
+                <p class="text-6xl">Stream: <span id="stream_status">{{ stream_status }}</span></p>
+                <p class="text-5xl text-gray-600">Last Frame: <span id="last_frame_time">{{ last_frame_time }}</span></p>
             </div>
-        </div>
-
-        <!-- Right Section: Map, Metrics, and Sensor Plot -->
-        <div class="w-full md:w-1/2 flex flex-col gap-8">
-            <!-- Map Section -->
-            <div class="bg-gray-100 border-2 border-blue-800 rounded shadow p-8">
-                <h2 class="text-6xl font-semibold text-center mb-6">Temi's Location on Suite Map</h2>
-                <div id="map-container" style="position: relative; width: 100%; max-width: 2400px; margin: auto;">
-                    <img id="map-image" src="../static/map.png" alt="Temi Robot Map" style="width: 100%; height: auto; display: block; margin: auto;">
-                    <div id="robot-dot" style="position: absolute; width: 30px; height: 30px; background-color: darkgreen; border-radius: 50%; transform: translate(-50%, -50%); display: none;"></div>
-                </div>
-            </div>
-
-            <!-- Metrics and Sensor Plot -->
-            <div class="flex flex-col gap-8">
-                <div class="bg-gray-100 border-2 border-blue-800 rounded shadow p-8">
-                    <h2 class="text-6xl font-semibold mb-6 text-center">📈 Real-Time Metrics</h2>
-                    <div id="metrics-display" class="grid grid-cols-4 gap-x-6 gap-y-4 text-4xl text-gray-800">
-                        <p><strong>People Detected Today:</strong> <span id="people_detected_today">-</span></p>
-                        <p><strong>Falls (Box):</strong> <span id="falls_box">-</span></p>
-                        <p><strong>Falls (Pose):</strong> <span id="falls_pose">-</span></p>
-                        <p><strong>Falls (Bottom):</strong> <span id="falls_bottom">-</span></p>
-                        <p><strong>Falls (Full):</strong> <span id="falls_full">-</span></p>
-                        <p><strong>Frames Processed:</strong> <span id="frames_processed">-</span></p>
-                        <p><strong>Smells Detected Today:</strong> <span id="new_csv_rows_today">-</span></p>
-                        <p><strong>Total Smells:</strong> <span id="total_csv_rows">-</span></p>
-                    </div>
-                </div>
-                <div class="bg-gray-100 border-2 border-blue-800 rounded shadow p-8 flex flex-col flex-grow">
-                    <h2 class="text-6xl font-semibold text-center">Smell Sensor Fluctuations Based on Moving Average (100x)</h2>
-                    <p class="text-5xl text-gray-600 text-center mb-6">Timestamp: <span id="sensor_timestamp">-</span></p>
-                    <div class="flex-grow overflow-hidden">
-                        <canvas id="sensorChart" class="w-full h-full"></canvas>
+            <div class="w-full flex justify-center mb-8 mt-6">
+                <div class="bg-gray-100 p-4 rounded shadow text-center">
+                    <div class="flex flex-row justify-center items-center space-x-4">
+                        <button id="start-recording" class="bg-green-500 text-white text-6xl px-4 py-2 rounded hover:bg-green-600">Start Recording</button>
+                        <button id="stop-recording" class="bg-red-500 text-white text-6xl px-4 py-2 rounded hover:bg-red-600">Stop Recording</button>
+                        <button id="toggle-mode" class="bg-blue-500 text-white text-6xl px-4 py-2 rounded shadow hover:bg-blue-600">Glasses</button>
+                        <button id="toggle-fullscreen" class="bg-purple-500 text-white text-6xl px-4 py-2 rounded shadow hover:bg-purple-600">Fullscreen</button>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+
+    <div class="w-full md:w-1/2 flex flex-col gap-8">
+        <div class="bg-gray-100 border-2 border-blue-800 rounded shadow p-8">
+            <h2 class="text-6xl font-semibold text-center mb-6">Temi's Location on Suite Map</h2>
+            <div id="map-container" style="position: relative; width: 100%; max-width: 2400px; margin: auto;">
+                <img id="map-image" src="../static/map.png" alt="Temi Robot Map" style="width: 100%; height: auto; display: block; margin: auto;">
+                <div id="robot-dot" style="position: absolute; width: 30px; height: 30px; background-color: darkgreen; border-radius: 50%; transform: translate(-50%, -50%); display: none;"></div>
+            </div>
+        </div>
+
+        <div class="flex flex-col gap-8 flex-grow">
+            <div class="bg-gray-100 border-2 border-blue-800 rounded shadow p-8">
+                <h2 class="text-6xl font-semibold mb-6 text-center">📈 Real-Time Metrics</h2>
+                <div id="metrics-display" class="grid grid-cols-4 gap-x-6 gap-y-4 text-4xl text-gray-800">
+                    <p><strong>People Detected Today:</strong> <span id="people_detected_today">-</span></p>
+                    <p><strong>Falls (Box):</strong> <span id="falls_box">-</span></p>
+                    <p><strong>Falls (Pose):</strong> <span id="falls_pose">-</span></p>
+                    <p><strong>Falls (Bottom):</strong> <span id="falls_bottom">-</span></p>
+                    <p><strong>Falls (Full):</strong> <span id="falls_full">-</span></p>
+                    <p><strong>Frames Processed:</strong> <span id="frames_processed">-</span></p>
+                    <p><strong>Smells Detected Today:</strong> <span id="new_csv_rows_today">-</span></p>
+                    <p><strong>Total Smells:</strong> <span id="total_csv_rows">-</span></p>
+                </div>
+            </div>
+            <div class="bg-gray-100 border-2 border-blue-800 rounded shadow p-8 flex flex-col flex-grow" style="min-height: 0;">
+                <h2 class="text-6xl font-semibold text-center">Smell Sensor Fluctuations Based on Moving Average (100x)</h2>
+                <p class="text-5xl text-gray-600 text-center mb-6">Timestamp: <span id="sensor_timestamp">-</span></p>
+                <div class="flex-grow overflow-hidden" style="min-height: 300px;">
+                    <canvas id="sensorChart" class="w-full h-full"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
 <script>
     let sensorChart;
@@ -361,66 +357,6 @@
         }
     }
 
-    {#function createOrUpdateChart(values) {#}
-    {#    const ctx = document.getElementById('sensorChart').getContext('2d');#}
-    {#    const labels = values.map((_, i) => `#${i + 1}`);#}
-    {#    const data = {#}
-    {#        labels: labels,#}
-    {#        datasets: [{#}
-    {#            label: 'Sensor Variations',#}
-    {#            data: values,#}
-    {#            backgroundColor: values.map(v => v >= 0 ? 'rgba(34, 197, 94, 0.7)' : 'rgba(239, 68, 68, 0.7)'),#}
-    {#            borderColor: values.map(v => v >= 0 ? 'rgba(34, 197, 94, 1)' : 'rgba(239, 68, 68, 1)'),#}
-    {#            borderWidth: 1#}
-    {#        }]#}
-    {#    };#}
-    {##}
-    {#    const config = {#}
-    {#        type: 'bar',#}
-    {#        data: data,#}
-    {#        options: {#}
-    {#            indexAxis: 'y',#}
-    {#            responsive: true,#}
-    {#            maintainAspectRatio: false,#}
-    {#            scales: {#}
-    {#                x: {#}
-    {#                    min: -1,#}
-    {#                    max: 1,#}
-    {#                    ticks: {#}
-    {#                        stepSize: 0.1,#}
-    {#                        callback: val => `${(val * 100).toFixed(0)}%`#}
-    {#                    },#}
-    {#                    grid: {#}
-    {#                        drawBorder: true,#}
-    {#                        color: ctx => ctx.tick.value === 0 ? '#000' : '#e5e7eb'#}
-    {#                    }#}
-    {#                },#}
-    {#                y: {#}
-    {#                    ticks: {#}
-    {#                        autoSkip: false,#}
-    {#                        callback: (value, index) => index % 2 === 0 ? value : ''#}
-    {#                    }#}
-    {#                }#}
-    {#            },#}
-    {#            plugins: { legend: { display: false } },#}
-    {#            elements: {#}
-    {#                bar: {#}
-    {#                    barThickness: 'flex',#}
-    {#                    categoryPercentage: 0.9,#}
-    {#                    barPercentage: 0.9#}
-    {#                }#}
-    {#            }#}
-    {#        }#}
-    {#    };#}
-    {##}
-    {#    if (sensorChart) {#}
-    {#        sensorChart.options.animation = false;#}
-    {#        sensorChart.data = data;#}
-    {#        sensorChart.update();#}
-    {#    } else {#}
-    {#        sensorChart = new Chart(ctx, config);#}
-    {#    }#}
-    {#}#}
 
     function updateMetrics() {
         fetch('/metrics')
