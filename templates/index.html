@@ -60,15 +60,15 @@
                 <div class="mt-4 flex justify-center items-center gap-x-6">
                     <div class="flex items-center gap-x-2">
                         <span class="h-5 w-5 rounded-full bg-blue-800 border-2 border-white"></span>
-                        <p class="text-xl text-gray-800">Temi's Current Position</p>
+                        <p class="text-5xl text-gray-800">Temi's Current Position</p>
                     </div>
                     <div class="flex items-center gap-x-2">
                         <span class="h-5 w-5 rounded-full bg-red-600 border-2 border-white"></span>
-                        <p class="text-xl text-gray-800">Ammonia Detected</p>
+                        <p class="text-5xl text-gray-800">Ammonia Detected</p>
                     </div>
                     <div class="flex items-center gap-x-2">
                         <span class="h-5 w-5 rounded-full bg-green-600 border-2 border-white"></span>
-                        <p class="text-xl text-gray-800">No Ammonia Detected</p>
+                        <p class="text-5xl text-gray-800">No Ammonia Detected</p>
                     </div>
                 </div>
             </div>
@@ -89,7 +89,7 @@
                     </div>
                 </div>
                 <div class="bg-gray-100 border-2 border-blue-800 rounded shadow p-8 flex flex-col flex-grow">
-                    <h2 class="text-6xl font-semibold text-center">Smell Sensor Fluctuations Based on Moving Average (100x)</h2>
+                    <h2 class="text-6xl font-semibold text-center">Last Two Hours of Smell Data</h2>
                     <p class="text-5xl text-gray-600 text-center mb-6">Timestamp: <span id="sensor_timestamp">-</span></p>
                     <div class="flex-grow overflow-hidden">
                         <canvas id="sensorChart" class="w-full h-full"></canvas>
@@ -261,24 +261,48 @@
                         title: {
                             display: true,
                             text: 'Timestamp'
+                            font: {
+                                size: 18
+                            }
+                        },
+                        ticks: {
+                            font: {
+                                size: 14
+                            }
                         }
                     },
                     y: {
                         title: {
                             display: true,
-                            text: 'Sensor Value'
+                            text: 'Sensor Value',
+                            font: {
+                                size: 18
+                            }
+                        },
+                        ticks: {
+                            font: {
+                                 size: 14
+                            }
                         }
                     }
-                },
-                plugins: {
-                    legend: {
-                        position: 'top',
-                    },
-                    title: {
-                        display: true,
-                        text: 'Live Sensor Readings (2-Hour Window)'
-                    }
+    },
+    plugins: {
+        legend: {
+            position: 'top',
+            labels: {
+                font: {
+                    size: 16
                 }
+            }
+        },
+        title: {
+            display: true,
+            text: 'Live Sensor Readings (2-Hour Window)',
+            font: {
+                size: 20
+            }
+        }
+    }
             }
         };
 
