@@ -9,8 +9,8 @@ from datetime import datetime
 DEV_PATH = 'COM3'            # Adjust this to your actual serial port
 BAUD_RATE = 115200
 SENSOR_CSV_DIR = "Local_Sensor_Data"
-CSV_FILENAME = "sensor_data_local.csv"
-LOG_FILENAME = "sensor_log.txt"
+CSV_FILENAME = "add_ammonia_cubicle_oldSensor.csv"
+LOG_FILENAME = "add_ammonia_cubicle_oldSensor.txt"
 EXPECTED_LENGTH = 66         # Number of expected sensor values
 
 # === Setup Logging ===

@@ -10,7 +10,7 @@ from flask_cors import CORS
 
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 import numpy as np
 import os
 import json
@@ -26,6 +26,11 @@ from daily_reports import (
 )
 from training_pipeline import schedule_embedding_pipeline, run_embedding_pipeline
 from yolo_fall_detection import FallDetector  # Import the FallDetector class
+from smell_classifier import SmellClassifier
+from queue import Queue
+import schedule
+
+sse_queue = Queue()
 
 # Set logging to INFO level
 logging.basicConfig(level=logging.WARNING)
@@ -66,8 +71,21 @@ else:
             offline_bytes = buffer.tobytes()
             logger.info(f"Loaded filler image from {filler_image_path}, size={len(offline_bytes)} bytes")
 
-# Instantiate FallDetector globally
+# Instantiate FallDetector and SmellClassifier globally
 fall_detector = FallDetector()
+smell_classifier = SmellClassifier()
+
+# Store classified smell data
+classified_data = []
+
+# --- SSE CHANGE: Helper function to push metric updates ---
+def push_metrics_update():
+    """Puts the current metrics onto the SSE queue."""
+    metrics_payload = {
+        "event": "metrics_update",
+        "data": metrics
+    }
+    sse_queue.put(json.dumps(metrics_payload))
 
 # -------- aiohttp WebRTC server ----------
 app = web.Application()
@@ -118,78 +136,106 @@ async def create_peer_connection():
         logger.info(f"📡 DataChannel received: {channel.label}")
 
         @channel.on("message")
-        def on_message(message_str):  # Renamed to message_str to avoid conflict
-            global last_should_record  # Reference the outer global variable
-            global latest_sensor_data  # Reference the global sensor data store
+        def on_message(message_str):
+            global last_should_record
+            global latest_sensor_data
+            global classified_data
 
             try:
                 data_payload = json.loads(message_str)
                 timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                x_position, y_position = None, None  # Default to None
 
-                # Assume the client might send sensor values, recording flag, and position
-                # independently or combined.
+                # CHANGE: Handle position updates first, regardless of other data
+                if 'current_position' in data_payload and isinstance(data_payload.get('current_position'), dict):
+                    pos_data = data_payload['current_position']
+                    x_pos = pos_data.get('x')
+                    y_pos = pos_data.get('y')
 
-                # Handling sensor values and should_record flag
+                    # Ensure coordinates are valid numbers before processing
+                    if isinstance(x_pos, (int, float)) and isinstance(y_pos, (int, float)):
+                        x_position, y_position = x_pos, y_pos  # Store valid coordinates
+                        latest_sensor_data['current_position'] = pos_data
+
+                        # Send the real-time position update for the moving dot
+                        position_event_payload = {
+                            "event": "robot_position_update",
+                            "data": {"x": x_position, "y": y_position}
+                        }
+                        sse_queue.put(json.dumps(position_event_payload))
+                        logger.info(f"Pushed position update: x={x_position}, y={y_position}")
+
+                # CHANGE: Handle sensor value updates separately
                 if 'values' in data_payload:
                     sensor_values = data_payload.get('values')
                     should_record_from_payload = data_payload.get('should_record', False)
+                    formatted_values = format_data(sensor_values)
 
-                    latest_sensor_data['data'] = sensor_values
-                    latest_sensor_data['should_record'] = should_record_from_payload
-                    # Update timestamp if sensor data is present
-                    latest_sensor_data['timestamp'] = timestamp
-
+                    logging.info(f"[{timestamp}] DataChannel: Received sensor values: {sensor_values}")
+                    logging.info(f"[{timestamp}] DataChannel: formatted sensor values: {formatted_values}")
+                    # Update global store
+                    latest_sensor_data.update({
+                        'data': formatted_values,
+                        'should_record': should_record_from_payload,
+                        'timestamp': timestamp
+                    })
                     logger.info(
                         f"[{timestamp}] DataChannel: Received sensor data. Record flag: {should_record_from_payload}")
-                    # logger.debug(f"Sensor values: {sensor_values}") # Keep this for debugging if needed
 
-                    # Check if recording state changed from False to True for sensor data
-                    if not last_should_record and should_record_from_payload:
-                        increment("record_triggers_today")  # Metric for sensor data recording triggers
+                    # Push sensor data to the line graph
+                    if formatted_values:
+                        sensor_event_payload = {
+                            "event": "sensor_update",
+                            "data": {
+                                "timestamp": timestamp,
+                                "values": formatted_values
+                            }
+                        }
+                        sse_queue.put(json.dumps(sensor_event_payload))
 
-                    x_position = None
-                    y_position = None
-                    if 'current_position' in data_payload and isinstance(data_payload['current_position'], dict):
-                        x_position = data_payload['current_position'].get('x')
-                        y_position = data_payload['current_position'].get('y')
-
+                    # Logic for recording data and classified dots (which requires sensor values)
                     frame_filename = None
-                    if should_record_from_payload and frame_holder['frame'] is not None and not isinstance(
-                            frame_holder['frame'], bytes):
-                        # Save the most recent frame
-                        image_dir = os.path.join("Temi_Sensor_Data", "frames")
-                        os.makedirs(image_dir, exist_ok=True)
-                        frame_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')[:-3]  # Milliseconds
-                        frame_filename = f"frame_{frame_timestamp}.jpg"
-                        frame_path = os.path.join(image_dir, frame_filename)
-                        try:
-                            img_to_save = frame_holder['frame'].to_ndarray(format="bgr24")
-                            cv2.imwrite(frame_path, img_to_save)
-                            logger.info(f"Saved frame: {frame_path}")
-                        except Exception as e:
-                            logger.error(f"Error saving frame: {e}")
-                            frame_filename = None  # Reset filename if saving failed
-
-                    latest_sensor_data['frame_filename'] = frame_filename  # Store the filename
-
-                    # Record sensor values to CSV if flag is True
                     if should_record_from_payload:
-                        record_sensor_data_to_csv(sensor_values, timestamp, x_position, y_position,
-                                                  frame_filename)  # Pass x_position, y_position, and frame_filename
+                        if not last_should_record:
+                            increment("record_triggers_today")
+                            push_metrics_update()
+
+                        # Save frame if available
+                        if frame_holder['frame'] is not None and not isinstance(frame_holder['frame'], bytes):
+                            image_dir = os.path.join("Temi_Sensor_Data", "frames")
+                            os.makedirs(image_dir, exist_ok=True)
+                            frame_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')[:-3]
+                            frame_filename = f"frame_{frame_timestamp}.jpg"
+                            frame_path = os.path.join(image_dir, frame_filename)
+                            try:
+                                img_to_save = frame_holder['frame'].to_ndarray(format="bgr24")
+                                cv2.imwrite(frame_path, img_to_save)
+                                logger.info(f"Saved frame: {frame_path}")
+                            except Exception as e:
+                                logger.error(f"Error saving frame: {e}")
+                                frame_filename = None
+
+                        latest_sensor_data['frame_filename'] = frame_filename
+                        record_sensor_data_to_csv(sensor_values, timestamp, x_position, y_position, frame_filename)
+                        update_csv_metrics()
+
+                        # Classify and push map dot event (requires position AND values)
+                        if x_position is not None and y_position is not None and formatted_values:
+                            classification = smell_classifier.classify_sensor_data(formatted_values)
+                            logger.info(f"[{timestamp}] DataChannel: Classified smell data: {classification}")
+
+                            map_dot_payload = {
+                                "event": "map_dot_update",
+                                "data": {
+                                    'x': x_position,
+                                    'y': y_position,
+                                    'class': classification,
+                                    'timestamp': timestamp
+                                }
+                            }
+                            sse_queue.put(json.dumps(map_dot_payload))
 
                     last_should_record = should_record_from_payload
-
-                    # Handling current_position
-                if 'current_position' in data_payload:
-                    new_position = data_payload.get('current_position')
-                    latest_sensor_data['current_position'] = new_position
-                    #     don't update timestamp, because we don't want a new row in the csv file
-
-                    # If message contains neither, log a warning
-                if 'values' not in data_payload and 'current_position' not in data_payload:
-                    logger.warning(
-                        f"[{timestamp}] DataChannel: Received message with no 'values' or 'current_position' fields: {data_payload}")
-
 
             except json.JSONDecodeError as e:
                 logger.error(f"Failed to decode DataChannel JSON message: {message_str}. Error: {e}")
@@ -197,9 +243,38 @@ async def create_peer_connection():
                 logger.error(f"Failed to process DataChannel message: {e}")
 
     pcs.add(peer)
-
     increment("webrtc_connections")
+    push_metrics_update()
     return peer
+
+# get the fifteen channels from the raw sensor data
+def format_data(data):
+    # check if data is wrong length or contains any non-numeric values
+    if (len(data) != 66) or any(not isinstance(x, (int, float)) for x in data):
+        return None
+
+    # Define the channel map
+    channel_map = [999, 999, 11, 11, 11, 3, 3, 3, 2, 2, 2, 1, 1, 1, 999, 999,
+                   999, 999, 999, 999, 999, 9, 9, 9, 6, 6, 6, 5, 5, 5, 999, 999,
+                   999, 999, 14, 14, 14, 10, 10, 10, 7, 7, 7, 4, 4, 4, 999, 999,
+                   999, 999, 15, 15, 15, 13, 13, 13, 12, 12, 12, 8, 8, 8, 999, 999,
+                   16, 17]
+
+    # Filter out entries in data where the corresponding channel_map value is 999
+    filtered_data = [x for x, ch in zip(data, channel_map) if ch != 999]
+    num_groups = (len(filtered_data) - 2) // 3  # Calculate number of groups of 3, excluding temp and humidity
+    averaged_data = []
+    # Average every three values together, excluding the last two (temp and humidity)
+    for i in range(num_groups):
+        start = i * 3
+        end = start + 3
+        group_average = sum(filtered_data[start:end]) / 3
+        averaged_data.append(group_average)
+
+    # Add the last two values (temperature and humidity) without averaging
+    averaged_data.append(filtered_data[-2])  # Temperature
+    averaged_data.append(filtered_data[-1])  # Humidity
+    return averaged_data
 
 async def offer(request):
     params = await request.json()
@@ -247,6 +322,7 @@ async def offer(request):
 
     #REPORT: increment every api call
     increment("http_api_calls")
+    push_metrics_update()
 
     return web.json_response({
         "sdp": peer.localDescription.sdp,
@@ -293,6 +369,25 @@ def set_vision_mode():
     vision_mode['last_toggle'] = time.time()
     return jsonify({"status": "ok", "vision_mode": vision_mode})
 
+
+# --- SSE CHANGE: Create the new streaming endpoint ---
+@flask_app.route('/stream-updates')
+def stream_updates():
+    def event_stream():
+        while True:
+            # Block until a message is available
+            message = sse_queue.get()
+            # The message should be a JSON string with 'event' and 'data' keys
+            # We need to parse it to format the SSE message correctly
+            try:
+                payload = json.loads(message)
+                event_type = payload.get('event', 'message')
+                event_data = json.dumps(payload.get('data'))
+                yield f"event: {event_type}\ndata: {event_data}\n\n"
+            except (json.JSONDecodeError, TypeError):
+                logger.error(f"Could not format SSE message from queue item: {message}")
+
+    return Response(event_stream(), mimetype='text/event-stream')
 
 @flask_app.route('/status')
 def get_status():
@@ -373,12 +468,12 @@ latest_sensor_data = {"data": None, "timestamp": None, "should_record": False, "
 #
 #     return jsonify({"status": "Sensor data received"}), 200
 
-@flask_app.route('/get-latest-sensor-data', methods=['GET'])
-def get_latest_sensor_data():
-    #REPORT: increment every api call
-    increment("http_api_calls")
-    return jsonify(latest_sensor_data), 200
-
+# @flask_app.route('/get-latest-sensor-data', methods=['GET'])
+# def get_latest_sensor_data():
+#     #REPORT: increment every api call
+#     increment("http_api_calls")
+#     return jsonify(latest_sensor_data), 200
+#
 # Additional imports for recording
 video_writer = None
 recording = False
@@ -440,6 +535,11 @@ def trigger_report():
     return jsonify({"status": "sent" if success else "failed"})
 
 
+# @flask_app.route('/get-classified-data', methods=['GET'])
+# def get_classified_data():
+#     increment("http_api_calls")
+#     return jsonify(classified_data), 200
+
 @flask_app.route('/metrics', methods=['GET'])
 def get_metrics():
     return jsonify(metrics)
@@ -477,6 +577,7 @@ def gen_frames():
                 add_time(f"stream_{last_state}_seconds", elapsed)
             if current_state in ["frozen", "offline"]:
                 increment(f"stream_{current_state}_count")
+                push_metrics_update()
             last_state = current_state
             last_state_change_time = time.time()
         else:
@@ -520,20 +621,25 @@ def gen_frames():
                     if person_count > last_person_count and now - last_person_increment_time > person_cooldown:
                         increment("people_detected_today")
                         last_person_increment_time = now
+                        push_metrics_update()
                     last_person_count = person_count
 
                     if box_fallen and now - last_fall_times["box"] > fall_cooldown:
                         increment("falls_box")
                         last_fall_times["box"] = now
+                        push_metrics_update()
                     if pose_fallen and not prev_falls["pose"] and now - last_fall_times["pose"] > fall_cooldown:
                         increment("falls_pose")
                         last_fall_times["pose"] = now
+                        push_metrics_update()
                     if bottom_fallen and not prev_falls["bottom"] and now - last_fall_times["bottom"] > fall_cooldown:
                         increment("falls_bottom")
                         last_fall_times["bottom"] = now
+                        push_metrics_update()
                     if combined_fallen and not prev_falls["full"] and now - last_fall_times["full"] > fall_cooldown:
                         increment("falls_full")
                         last_fall_times["full"] = now
+                        push_metrics_update()
 
                     prev_falls["box"] = box_fallen
                     prev_falls["pose"] = pose_fallen
@@ -545,6 +651,7 @@ def gen_frames():
                     grid_img = np.vstack((top_row, bottom_row))
 
                 increment("frames_processed")
+                push_metrics_update()
 
                 if recording and video_writer is not None:
                     resized_frame = cv2.resize(grid_img, (640, 480))
@@ -626,6 +733,14 @@ def record_sensor_data_to_csv(sensor_data, timestamp, x_position=None, y_positio
         else:
             logger.warning(f"Unexpected sensor data format: {type(sensor_data)}. Data not saved.")
 
+def trigger_daily_map_clear():
+    """Puts a clear map event onto the SSE queue for all clients."""
+    clear_event_payload = {
+        "event": "clear_map_dots",
+        "data": {"message": "Clearing dots for the new day."}
+    }
+    sse_queue.put(json.dumps(clear_event_payload))
+    logger.info("Triggered daily map clear event for all clients.")
 
 
 # -------- Main Execution ----------
@@ -640,6 +755,26 @@ if __name__ == "__main__":
     update_csv_metrics()
 
 
+    # CHANGE: Consolidate all scheduled tasks into one background thread
+    def run_scheduled_tasks():
+        # --- Schedule all your daily tasks here ---
+        schedule_daily_report()  # This is your existing function call
+
+        # Schedule the new map clearing task to run every day at midnight
+        schedule.every().day.at("00:00").do(trigger_daily_map_clear)
+
+        logger.info("Daily tasks scheduled: Email report and map clearing.")
+
+        while True:
+            schedule.run_pending()
+            time.sleep(1)
+
+
+    # Run the scheduler in a separate thread
+    scheduler_thread = threading.Thread(target=run_scheduled_tasks, daemon=True)
+    scheduler_thread.start()
+
+
     async def aiohttp_main():
         runner = web.AppRunner(app)
         await runner.setup()
@@ -649,6 +784,7 @@ if __name__ == "__main__":
         while True:
             await asyncio.sleep(3600)
 
-    schedule_daily_report()        # then run report after embeddings are ready
 
+    # You can remove the old schedule_daily_report() call from here if it exists
+    # as it's now handled in the dedicated scheduler thread.
     asyncio.run(aiohttp_main())
