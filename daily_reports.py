@@ -88,6 +88,8 @@ def update_csv_metrics():
                         today_count += 1
     metrics["new_csv_rows_today"] = today_count
     metrics["total_csv_rows"] = row_count
+    import server
+    server.push_metrics_update()
 
 def get_video_metrics():
     count_total = 0

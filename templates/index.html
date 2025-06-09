@@ -6,6 +6,8 @@
     <title>Stream Monitor</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/date-fns@3/index.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 </head>
 <body class="bg-blue-800 min-h-screen text-[2rem] md:text-[2.5rem] leading-relaxed flex flex-col">
     <div class="ascii-art text-center py-8">
@@ -42,12 +44,32 @@
         </div>
     </div>
 
-    <div class="w-full md:w-1/2 flex flex-col gap-8">
-        <div class="bg-gray-100 border-2 border-blue-800 rounded shadow p-8">
-            <h2 class="text-6xl font-semibold text-center mb-6">Temi's Location on Suite Map</h2>
-            <div id="map-container" style="position: relative; width: 100%; max-width: 2400px; margin: auto;">
-                <img id="map-image" src="../static/map.png" alt="Temi Robot Map" style="width: 100%; height: auto; display: block; margin: auto;">
-                <div id="robot-dot" style="position: absolute; width: 30px; height: 30px; background-color: darkgreen; border-radius: 50%; transform: translate(-50%, -50%); display: none;"></div>
+      <!-- Right Section: Map, Metrics, and Sensor Plot -->
+        <div class="w-full md:w-1/2 flex flex-col gap-8">
+            <!-- Map Section -->
+            <div class="bg-gray-100 border-2 border-blue-800 rounded shadow p-8">
+                <h2 class="text-6xl font-semibold text-center mb-6">Temi's Location on Suite Map</h2>
+                <div id="map-container" style="position: relative; width: 100%; max-width: 2400px; margin: auto;">
+                    <img id="map-image" src="../static/map.png" alt="Temi Robot Map" style="width: 100%; height: auto; display: block; margin: auto;">
+
+                    <div id="classification-dots-container" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></div>
+
+                    <div id="robot-dot" style="position: absolute; width: 30px; height: 30px; background-color: darkblue; border-radius: 50%; transform: translate(-50%, -50%); display: none;"></div>
+                </div>
+                <div class="mt-4 flex justify-center items-center gap-x-6">
+                    <div class="flex items-center gap-x-2">
+                        <span class="h-5 w-5 rounded-full bg-blue-800 border-2 border-white"></span>
+                        <p class="text-5xl text-gray-800">Temi's Current Position</p>
+                    </div>
+                    <div class="flex items-center gap-x-2">
+                        <span class="h-5 w-5 rounded-full bg-red-600 border-2 border-white"></span>
+                        <p class="text-5xl text-gray-800">Ammonia Detected</p>
+                    </div>
+                    <div class="flex items-center gap-x-2">
+                        <span class="h-5 w-5 rounded-full bg-green-600 border-2 border-white"></span>
+                        <p class="text-5xl text-gray-800">No Ammonia Detected</p>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -64,12 +86,12 @@
                     <p><strong>Smells Detected Today:</strong> <span id="new_csv_rows_today">-</span></p>
                     <p><strong>Total Smells:</strong> <span id="total_csv_rows">-</span></p>
                 </div>
-            </div>
-            <div class="bg-gray-100 border-2 border-blue-800 rounded shadow p-8 flex flex-col flex-grow" style="min-height: 0;">
-                <h2 class="text-6xl font-semibold text-center">Smell Sensor Fluctuations Based on Moving Average (100x)</h2>
-                <p class="text-5xl text-gray-600 text-center mb-6">Timestamp: <span id="sensor_timestamp">-</span></p>
-                <div class="flex-grow overflow-hidden" style="min-height: 300px;">
-                    <canvas id="sensorChart" class="w-full h-full"></canvas>
+                <div class="bg-gray-100 border-2 border-blue-800 rounded shadow p-8 flex flex-col flex-grow">
+                    <h2 class="text-6xl font-semibold text-center">Last Two Hours of Smell Data</h2>
+                    <p class="text-5xl text-gray-600 text-center mb-6">Timestamp: <span id="sensor_timestamp">-</span></p>
+                    <div class="flex-grow overflow-hidden">
+                        <canvas id="sensorChart" class="w-full h-full"></canvas>
+                    </div>
                 </div>
             </div>
         </div>
@@ -78,11 +100,7 @@
 
 <script>
     let sensorChart;
-    const windowSize = 3;
-    const sensorHistory = [];
-    const sensorDataLength = 66;
-    let baseline = null;
-    const sensitivityFactor = 100;
+    const twoHourWindow = 2 * 60 * 60 * 1000; // 2 hours in milliseconds
 
     let glassesMode = false;
     let fullscreenMode = false;
@@ -186,177 +204,196 @@
         }
     };
 
-    function computeBaseline(history) {
-        const baseline = Array(sensorDataLength).fill(0);
-        history.forEach(frame => {
-            frame.forEach((val, i) => baseline[i] += val);
-        });
-        return baseline.map(val => val / history.length);
-    }
+    // --- CHART AND MAP LOGIC REBUILT FOR SSE ---
 
-    function normalizeUsingWindow(newFrame) {
-        if (sensorHistory.length >= windowSize) sensorHistory.shift();
-        sensorHistory.push(newFrame);
-        if (sensorHistory.length < windowSize) return Array(sensorDataLength).fill(0);
-        if (!baseline) baseline = computeBaseline(sensorHistory);
+    function createOrUpdateChart() {
+        if (sensorChart) return; // Only create once
 
-        return newFrame.map((val, i) => {
-            if (baseline[i] === 0) return 0;
-            let normalizedVal = (val - baseline[i]) / baseline[i];
-            return Math.max(-1, Math.min(normalizedVal * sensitivityFactor, 1));
-        });
-    }
-
-    function updateStatus() {
-        fetch('/status')
-            .then(res => res.json())
-            .then(data => {
-                document.getElementById('stream_status').innerText = data.stream_status;
-                document.getElementById('last_frame_time').innerText = data.last_frame_time;
-            });
-    }
-
-    function updateSensorData() {
-    fetch('/get-latest-sensor-data')
-        .then(res => res.json())
-        .then(data => {
-            document.getElementById('sensor_timestamp').innerText = data.timestamp || "-";
-            if (Array.isArray(data.data)) {
-                const cleaned = data.data.map(Number).filter(n => !isNaN(n));
-                if (cleaned.length === sensorDataLength) {
-                    const normalized = normalizeUsingWindow(cleaned);
-                    createOrUpdateChart(normalized);
-                }
-            }
-
-            // Update robot position on map
-            if (data.current_position && typeof data.current_position.x === 'number' && typeof data.current_position.y === 'number') {
-                const robotMapCoordX_meters = data.current_position.x;
-                const robotMapCoordY_meters = data.current_position.y;
-
-                const mapImageElement = document.getElementById('map-image');
-                const robotDotElement = document.getElementById('robot-dot');
-
-                if (mapImageElement && robotDotElement && mapImageElement.clientWidth > 0 && mapImageElement.clientHeight > 0) {
-                    const imageDisplayWidthPx = mapImageElement.clientWidth;
-                    const imageDisplayHeightPx = mapImageElement.clientHeight;
-
-                    // Hardcoded values from Python
-                    const PY_ORIGIN_X_METERS = -12.779715;
-                    const PY_ORIGIN_Y_METERS = -10.486041;
-                    const PY_RESOLUTION_METERS_PER_PIXEL = 0.05;
-                    const PY_TOP_CROP_PIXELS = 100;
-                    const PY_LEFT_CROP_PIXELS = 20;
-
-                    // Compute pixel indices as in Python
-                    let i_px = Math.round((robotMapCoordX_meters - PY_ORIGIN_X_METERS) / PY_RESOLUTION_METERS_PER_PIXEL);
-                    let j_px = Math.round((robotMapCoordY_meters - PY_ORIGIN_Y_METERS) / PY_RESOLUTION_METERS_PER_PIXEL);
-
-
-                    // Adjust for cropping
-                    i_px -= PY_TOP_CROP_PIXELS;
-                    j_px -= PY_LEFT_CROP_PIXELS;
-
-                    console.log(`Computed Pixels: i_px=${i_px}, j_px=${j_px}`);
-
-                    // The image may be scaled in display; use the real image size (naturalWidth, naturalHeight)
-                    const CROPPED_ROWS = 407;
-                    const CROPPED_COLS = 1221;
-
-                    // Scale from real pixels to display pixels
-                    const scaleX = imageDisplayWidthPx / CROPPED_COLS;
-                    const scaleY = imageDisplayHeightPx / CROPPED_ROWS;
-
-                    const displayX = j_px * scaleX;
-                    const displayY = i_px * scaleY;
-
-                    // Position the dot
-                    robotDotElement.style.left = `${displayX}px`;
-                    robotDotElement.style.top = `${displayY}px`;
-                    robotDotElement.style.display = 'block';
-
-                }
-            } else {
-                const robotDotElement = document.getElementById('robot-dot');
-                if (robotDotElement) {
-                    robotDotElement.style.display = 'none';
-                }
-            }
-        })
-        .catch(error => {
-            console.error("Error fetching or processing sensor data:", error);
-            const robotDotElement = document.getElementById('robot-dot');
-            if (robotDotElement) {
-                robotDotElement.style.display = 'none';
-            }
-        });
-}
-
-
-    function createOrUpdateChart(values) {
         const ctx = document.getElementById('sensorChart').getContext('2d');
 
-        // Updated labels to be more descriptive
-        const labels = values.map((_, i) => `Sensor Reading Number ${i + 1} (Sample Point)`);
+        // Helper to generate 17 distinct colors for the lines
+        const lineColors = [
+            '#FF6384', '#36A2EB', '#FFCE56', '#08d5bd', '#9966FF', '#FF9F40', '#8C564B',
+            '#E83E8C', '#20C997', '#6610F2', '#fd9814', '#17A2B8', '#6F42C1', '#DC3545',
+            '#c242f0', '#0072B2', '#D55E00'
+        ];
 
-        const data = {
-            labels: labels,
-            datasets: [{
-                label: 'Sensor Variations',
-                data: values,
-                backgroundColor: values.map(v => v >= 0 ? 'rgba(34, 197, 94, 0.7)' : 'rgba(239, 68, 68, 0.7)'),
-                borderColor: values.map(v => v >= 0 ? 'rgba(34, 197, 94, 1)' : 'rgba(239, 68, 68, 1)'),
-                borderWidth: 1
-            }]
-        };
+        const datasets = [];
+        for (let i = 0; i < 17; i++) {
+            let label;
+            if (i < 15) {
+                label = `Sensor Group ${i + 1}`;
+            } else if (i === 15) {
+                label = 'Temperature';
+            } else {
+                label = 'Humidity';
+            }
+            datasets.push({
+                label: label,
+                data: [], // Data points will be {x: timestamp, y: value}
+                borderColor: lineColors[i],
+                backgroundColor: lineColors[i],
+                fill: false,
+                borderWidth: 2,
+                pointRadius: 1,
+            });
+        }
 
         const config = {
-            type: 'bar',
-            data: data,
+            type: 'line',
+            data: {
+                datasets: datasets
+            },
             options: {
-                indexAxis: 'x', // Switched from 'y' to 'x' to rotate the chart
                 responsive: true,
                 maintainAspectRatio: false,
                 scales: {
-                    y: { // Now y-axis represents the values
-                        min: -1,
-                        max: 1,
-                        ticks: {
-                            stepSize: 0.1,
-                            callback: val => `${(val * 100).toFixed(0)}%`
+                    x: {
+                        type: 'time',
+                        time: {
+                            unit: 'minute',
+                            tooltipFormat: 'll HH:mm:ss',
+                            displayFormats: {
+                                minute: 'HH:mm'
+                            }
                         },
-                        grid: {
-                            drawBorder: true,
-                            color: ctx => ctx.tick.value === 0 ? '#000' : '#e5e7eb'
+                        title: {
+                            display: true,
+                            text: 'Timestamp',
+                            font: {
+                                size: 30
+                            }
+                        },
+                        ticks: {
+                            font: {
+                                size: 20
+                            }
                         }
                     },
-                    x: { // Now x-axis represents the labels
+                    y: {
+                        title: {
+                            display: true,
+                            text: 'Sensor Value',
+                            font: {
+                                size: 30
+                            }
+                        },
                         ticks: {
-                            autoSkip: false,
-                            callback: (value, index) => index % 2 === 0 ? value : ''
+                            font: {
+                                 size: 20
+                            }
                         }
                     }
-                },
-                plugins: { legend: { display: false } },
-                elements: {
-                    bar: {
-                        barThickness: 'flex',
-                        categoryPercentage: 0.9,
-                        barPercentage: 0.9
-                    }
+    },
+    plugins: {
+        legend: {
+            position: 'top',
+            labels: {
+                font: {
+                    size: 32
                 }
+            }
+        },
+        title: {
+            display: true,
+            text: 'Live Sensor Readings (2-Hour Window)',
+            font: {
+                size: 40
+            }
+        }
+    }
             }
         };
 
-        if (sensorChart) {
-            sensorChart.options.animation = false;
-            sensorChart.data = data;
-            sensorChart.update();
-        } else {
-            sensorChart = new Chart(ctx, config);
-        }
+        sensorChart = new Chart(ctx, config);
     }
 
+    function addDataToChart(timestamp, values) {
+        if (!sensorChart || values.length !== 17) return;
+
+        const newTime = new Date(timestamp).getTime();
+
+        // Add new data
+        values.forEach((value, i) => {
+            sensorChart.data.datasets[i].data.push({ x: newTime, y: value });
+        });
+
+        // Remove old data that is outside the 2-hour window
+        sensorChart.data.datasets.forEach(dataset => {
+            while (dataset.data.length > 0 && newTime - dataset.data[0].x > twoHourWindow) {
+                dataset.data.shift();
+            }
+        });
+
+        sensorChart.update();
+    }
+
+    function plotClassificationDot(x_pos, y_pos, classification) {
+        // This function places a PERMANENT dot for a classification event
+        const mapContainer = document.getElementById('classification-dots-container');
+        if (!mapContainer) return;
+
+        const dot = document.createElement('div');
+        dot.style.position = 'absolute';
+        dot.style.width = '15px';
+        dot.style.height = '15px';
+        dot.style.borderRadius = '50%';
+        dot.style.border = '2px solid white';
+        dot.style.backgroundColor = classification === 'ambient' ? 'darkgreen' : 'red';
+
+        // We need to use the same scaling logic as the moving robot dot
+        const mapImageElement = document.getElementById('map-image');
+        if (!mapImageElement || mapImageElement.clientWidth === 0) return;
+
+        const imageDisplayWidthPx = mapImageElement.clientWidth;
+        const imageDisplayHeightPx = mapImageElement.clientHeight;
+
+        const PY_ORIGIN_X_METERS = -12.779715;
+        const PY_ORIGIN_Y_METERS = -10.486041;
+        const PY_RESOLUTION_METERS_PER_PIXEL = 0.05;
+        const PY_TOP_CROP_PIXELS = 100;
+        const PY_LEFT_CROP_PIXELS = 20;
+        const CROPPED_ROWS = 407;
+        const CROPPED_COLS = 1221;
+
+        let i_px = Math.round((x_pos - PY_ORIGIN_X_METERS) / PY_RESOLUTION_METERS_PER_PIXEL) - PY_TOP_CROP_PIXELS;
+        let j_px = Math.round((y_pos - PY_ORIGIN_Y_METERS) / PY_RESOLUTION_METERS_PER_PIXEL) - PY_LEFT_CROP_PIXELS;
+
+        const scaleX = imageDisplayWidthPx / CROPPED_COLS;
+        const scaleY = imageDisplayHeightPx / CROPPED_ROWS;
+
+        dot.style.left = `${j_px * scaleX}px`;
+        dot.style.top = `${i_px * scaleY}px`;
+        dot.style.transform = 'translate(-50%, -50%)';
+
+        mapContainer.appendChild(dot);
+    }
+
+    function updateRobotPosition(x_pos, y_pos) {
+        // This function MOVES the main robot dot
+        const robotDotElement = document.getElementById('robot-dot');
+        const mapImageElement = document.getElementById('map-image');
+        if (!robotDotElement || !mapImageElement || mapImageElement.clientWidth === 0) return;
+
+        const imageDisplayWidthPx = mapImageElement.clientWidth;
+        const imageDisplayHeightPx = mapImageElement.clientHeight;
+        const PY_ORIGIN_X_METERS = -12.779715;
+        const PY_ORIGIN_Y_METERS = -10.486041;
+        const PY_RESOLUTION_METERS_PER_PIXEL = 0.05;
+        const PY_TOP_CROP_PIXELS = 100;
+        const PY_LEFT_CROP_PIXELS = 20;
+        const CROPPED_ROWS = 407;
+        const CROPPED_COLS = 1221;
+
+        let i_px = Math.round((x_pos - PY_ORIGIN_X_METERS) / PY_RESOLUTION_METERS_PER_PIXEL) - PY_TOP_CROP_PIXELS;
+        let j_px = Math.round((y_pos - PY_ORIGIN_Y_METERS) / PY_RESOLUTION_METERS_PER_PIXEL) - PY_LEFT_CROP_PIXELS;
+
+        const scaleX = imageDisplayWidthPx / CROPPED_COLS;
+        const scaleY = imageDisplayHeightPx / CROPPED_ROWS;
+
+        robotDotElement.style.left = `${j_px * scaleX}px`;
+        robotDotElement.style.top = `${i_px * scaleY}px`;
+        robotDotElement.style.display = 'block';
 
     function updateMetrics() {
         fetch('/metrics')
@@ -373,14 +410,58 @@
             });
     }
 
-    setInterval(updateStatus, 1000);
-    setInterval(updateSensorData, 1000); // This will now also update the map dot
-    setInterval(updateMetrics, 1000);
 
+    // --- SSE CHANGE: Main Event Listener ---
+    const eventSource = new EventSource('/stream-updates');
+
+    eventSource.addEventListener('sensor_update', function(event) {
+        const data = JSON.parse(event.data);
+        document.getElementById('sensor_timestamp').innerText = data.timestamp || "-";
+        addDataToChart(data.timestamp, data.values);
+    });
+
+    eventSource.addEventListener('map_dot_update', function(event) {
+        const data = JSON.parse(event.data);
+        plotClassificationDot(data.x, data.y, data.class);
+    });
+
+    eventSource.addEventListener('robot_position_update', function(event) {
+        const data = JSON.parse(event.data);
+        updateRobotPosition(data.x, data.y);
+    });
+
+    eventSource.addEventListener('clear_map_dots', function(event) {
+        console.log('Received signal to clear map dots.', event.data);
+        const dotsContainer = document.getElementById('classification-dots-container');
+        if (dotsContainer) {
+            dotsContainer.innerHTML = ''; // Clear all the red and green dots
+        }
+    });
+
+    eventSource.addEventListener('metrics_update', function(event) {
+        const data = JSON.parse(event.data);
+        document.getElementById('people_detected_today').innerText = data.people_detected_today;
+        document.getElementById('falls_box').innerText = data.falls_box;
+        document.getElementById('falls_pose').innerText = data.falls_pose;
+        document.getElementById('falls_bottom').innerText = data.falls_bottom;
+        document.getElementById('falls_full').innerText = data.falls_full;
+        document.getElementById('frames_processed').innerText = data.frames_processed;
+        document.getElementById('new_csv_rows_today').innerText = data.new_csv_rows_today;
+        document.getElementById('total_csv_rows').innerText = data.total_csv_rows;
+    });
+
+    eventSource.onerror = function(err) {
+        console.error("EventSource failed:", err);
+    };
+
+    // Initial setup calls
+    createOrUpdateChart();
     updateButtonStates();
-    updateMetrics();
-    updateStatus();
-    updateSensorData(); // Initial call to populate data, including map dot if available
+    // We can fetch initial metrics once on load
+    fetch('/metrics').then(res => res.json()).then(data => {
+        updateMetrics();
+    });
+
 </script>
 </body>
 </html>
