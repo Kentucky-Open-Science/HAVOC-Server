@@ -6,7 +6,7 @@ from aiortc import MediaStreamTrack, RTCPeerConnection, RTCSessionDescription
 from aiortc.contrib.media import MediaRelay
 from flask import Flask, Response, render_template, jsonify, request
 from flask import Flask
-from flask_cors import CORS
+# from flask_cors import CORSt
 
 import threading
 import time
@@ -15,6 +15,7 @@ import numpy as np
 import os
 import json
 import time
+import random  # <-- ADDED IMPORT
 from aiortc.sdp import candidate_from_sdp, candidate_to_sdp, SessionDescription as SDPDescription
 from daily_reports import (
     send_email_report,
@@ -33,7 +34,7 @@ import schedule
 sse_queue = Queue()
 
 # Set logging to INFO level
-logging.basicConfig(level=logging.WARNING)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger("temi-stream")
 
 # WebRTC globals
@@ -332,7 +333,7 @@ async def offer(request):
 app.router.add_post("/offer", offer)
 # -------- Flask video feed server ----------
 flask_app = Flask(__name__)
-CORS(flask_app)  # <-- Enable CORS for all routes
+# CORS(flask_app)  # <-- Enable CORS for all routes
 
 @flask_app.route('/')
 def index():
@@ -419,62 +420,6 @@ def video_feed():
 # Global variable to hold latest sensor data
 latest_sensor_data = {"data": None, "timestamp": None, "should_record": False, "current_position": None, "frame_filename": None}
 
-# Alternative endpoint to receive sensor data from the Temi robot, not used in the current setup
-# @flask_app.route('/sensor-data', methods=['POST'])
-# def sensor_data():
-#     global latest_sensor_data
-#     data = request.json.get('sensor_data')
-#     should_record = request.json.get('should_record', False)
-#     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-#     current_position = request.json.get('current_position', None)
-#
-#     x_position = None
-#     y_position = None
-#     if current_position and isinstance(current_position, dict):
-#         x_position = current_position.get('x')
-#         y_position = current_position.get('y')
-#
-#     frame_filename = None
-#     if should_record and frame_holder['frame'] is not None and not isinstance(frame_holder['frame'], bytes):
-#         # Save the most recent frame
-#         image_dir = os.path.join("Temi_Sensor_Data", "frames")
-#         os.makedirs(image_dir, exist_ok=True)
-#         frame_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')[:-3]  # Milliseconds
-#         frame_filename = f"frame_{frame_timestamp}.jpg"
-#         frame_path = os.path.join(image_dir, frame_filename)
-#         try:
-#             img_to_save = frame_holder['frame'].to_ndarray(format="bgr24")
-#             cv2.imwrite(frame_path, img_to_save)
-#             logger.info(f"Saved frame: {frame_path}")
-#         except Exception as e:
-#             logger.error(f"Error saving frame: {e}")
-#             frame_filename = None  # Reset filename if saving failed
-#
-#
-#     latest_sensor_data = {
-#         "data": data,
-#         "timestamp": timestamp,
-#         "should_record": should_record,
-#         "current_position": current_position,
-#         "frame_filename": frame_filename
-#     }
-#
-#     # # Record to CSV if flag is True
-#     # if should_record:                                 <------ Rest API version to record data from another source
-#     #     record_sensor_data_to_csv(data, timestamp)
-#
-#     #REPORT: increment every api call
-#     increment("http_api_calls")
-#
-#     return jsonify({"status": "Sensor data received"}), 200
-
-# @flask_app.route('/get-latest-sensor-data', methods=['GET'])
-# def get_latest_sensor_data():
-#     #REPORT: increment every api call
-#     increment("http_api_calls")
-#     return jsonify(latest_sensor_data), 200
-#
-# Additional imports for recording
 video_writer = None
 recording = False
 record_lock = threading.Lock()
@@ -534,15 +479,68 @@ def trigger_report():
 
     return jsonify({"status": "sent" if success else "failed"})
 
-
-# @flask_app.route('/get-classified-data', methods=['GET'])
-# def get_classified_data():
-#     increment("http_api_calls")
-#     return jsonify(classified_data), 200
-
 @flask_app.route('/metrics', methods=['GET'])
 def get_metrics():
     return jsonify(metrics)
+
+# ===============================================
+# =========== NEW DEBUG SSE ROUTE ===============
+# ===============================================
+@flask_app.route('/debug-stream')
+def debug_stream():
+    def event_stream():
+        while True:
+            now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+            # 1. Fake Metrics
+            metrics_payload = {
+                "event": "metrics_update",
+                "data": {
+                    'people_detected_today': random.randint(5, 50),
+                    'falls_box': random.randint(0, 5),
+                    'falls_pose': random.randint(0, 5),
+                    'falls_bottom': random.randint(0, 5),
+                    'falls_full': random.randint(0, 5),
+                    'frames_processed': random.randint(1000, 5000),
+                    'new_csv_rows_today': random.randint(100, 500),
+                    'total_csv_rows': random.randint(1000, 5000)
+                }
+            }
+            yield f"event: {metrics_payload['event']}\ndata: {json.dumps(metrics_payload['data'])}\n\n"
+
+            # 2. Fake Sensor Update
+            sensor_payload = {
+                "event": "sensor_update",
+                "data": {
+                    "timestamp": now_str,
+                    "values": [random.uniform(100, 800) for _ in range(15)] + [random.uniform(20, 30), random.uniform(40, 60)]
+                }
+            }
+            yield f"event: {sensor_payload['event']}\ndata: {json.dumps(sensor_payload['data'])}\n\n"
+
+            # 3. Fake Robot Position
+            position_payload = {
+                "event": "robot_position_update",
+                "data": {"x": random.uniform(-10, -6), "y": random.uniform(-10, -6)}
+            }
+            yield f"event: {position_payload['event']}\ndata: {json.dumps(position_payload['data'])}\n\n"
+
+            # 4. Optional: Map dot
+            dot_payload = {
+                "event": "map_dot_update",
+                "data": {
+                    'x': random.uniform(-10, -6),
+                    'y': random.uniform(-10, -6),
+                    'class': random.choice(['ambient', 'ammonia_detected_debug']),
+                    'timestamp': now_str
+                }
+            }
+            yield f"event: {dot_payload['event']}\ndata: {json.dumps(dot_payload['data'])}\n\n"
+
+            time.sleep(1)  # Send updates every second
+
+    return Response(event_stream(), mimetype='text/event-stream')
+
 
 def gen_frames():
     global last_pts, freeze_detected_time, duplicate_frame_count, last_frame_time, video_writer, recording
