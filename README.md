@@ -15,7 +15,7 @@ This project is a monitoring system for the [Healthcare Assistant with Video, Ol
 1. **Clone the repository**:
 
    ```bash
-   git clone [insert link]
+   git clone https://github.com/innovationcore/HAVOC-Server.git
    cd HAVOC-Server
    ```
 
