@@ -1,6 +1,6 @@
 # HAVOC-Server: Temi Monitoring System
 
-This project is a monitoring system for the Healthcare Assistant with Video, Olfaction, and Conversation (HAVOC) program running on the Temi robot. It uses computer vision and machine learning to detect falls, classify smells, and generate daily reports. It provides real-time metrics and visualizations through a web interface, making it ideal for applications in healthcare, safety monitoring, or robotics research.
+This project is a monitoring system for the [Healthcare Assistant with Video, Olfaction, and Conversation (HAVOC)](https://github.com/innovationcore/HAVOC-TemiApp) program running on the Temi robot. It uses computer vision and machine learning to detect falls, classify smells, and generate daily reports. It provides real-time metrics and visualizations through a web interface, making it ideal for applications in healthcare, safety monitoring, or robotics research.
 
 ## Features
 
