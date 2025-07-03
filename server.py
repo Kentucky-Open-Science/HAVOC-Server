@@ -2,11 +2,11 @@ import asyncio
 import cv2
 import logging
 from aiohttp import web
-from aiortc import MediaStreamTrack, RTCPeerConnection, RTCSessionDescription
+from aiortc import MediaStreamTrack, RTCPeerConnection, RTCSessionDescription, RTCConfiguration, RTCIceServer
 from aiortc.contrib.media import MediaRelay
 from flask import Flask, Response, render_template, jsonify, request
 from flask import Flask
-from flask_cors import CORS
+# from flask_cors import CORSt
 
 import threading
 import time
@@ -15,6 +15,7 @@ import numpy as np
 import os
 import json
 import time
+import random  # <-- ADDED IMPORT
 from aiortc.sdp import candidate_from_sdp, candidate_to_sdp, SessionDescription as SDPDescription
 from daily_reports import (
     send_email_report,
@@ -24,7 +25,8 @@ from daily_reports import (
     update_csv_metrics,
     metrics,
 )
-from training_pipeline import schedule_embedding_pipeline, run_embedding_pipeline
+# ---MODIFIED---
+from report_visualizer import generate_tsne_visualization
 from yolo_fall_detection import FallDetector  # Import the FallDetector class
 from smell_classifier import SmellClassifier
 from queue import Queue
@@ -33,7 +35,7 @@ import schedule
 sse_queue = Queue()
 
 # Set logging to INFO level
-logging.basicConfig(level=logging.WARNING)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger("temi-stream")
 
 # WebRTC globals
@@ -50,7 +52,6 @@ freeze_threshold = 5.0
 last_frame_time = "N/A"
 last_should_record = False
 vision_mode = {"glasses": False, "fullscreen": False, "last_toggle": 0}
-
 
 # Load offline placeholder image
 filler_image_path = os.path.join('static', 'temiFace_screen_saver.png')
@@ -78,6 +79,7 @@ smell_classifier = SmellClassifier()
 # Store classified smell data
 classified_data = []
 
+
 # --- SSE CHANGE: Helper function to push metric updates ---
 def push_metrics_update():
     """Puts the current metrics onto the SSE queue."""
@@ -87,8 +89,10 @@ def push_metrics_update():
     }
     sse_queue.put(json.dumps(metrics_payload))
 
+
 # -------- aiohttp WebRTC server ----------
 app = web.Application()
+
 
 class VideoProcessorTrack(MediaStreamTrack):
     kind = "video"
@@ -96,25 +100,40 @@ class VideoProcessorTrack(MediaStreamTrack):
     def __init__(self, track):
         super().__init__()
         self.track = track
+        self.first_frame_logged = False  # Add a flag to log the first frame only once
 
     async def recv(self):
         frame = await self.track.recv()
         frame_holder['frame'] = frame
-        if last_pts is None:
-            logger.info(f"WebRTC stream started, first frame received, pts={frame.pts}")
+
+        # --- DEBUG LOGGING START ---
+        if not self.first_frame_logged:
+            logger.info(f"🎉🎉🎉 FIRST video frame received! PTS: {frame.pts}, Size: {len(frame.to_ndarray())} bytes 🎉🎉🎉")
+            self.first_frame_logged = True
+        else:
+            logger.debug(f"Received subsequent video frame with pts={frame.pts}")
+        # --- DEBUG LOGGING END ---
+
         return frame
 
+
 async def create_peer_connection():
+    # --- CORRECT STUN SERVER CONFIGURATION ---
+    # configuration = RTCConfiguration(iceServers=[
+    #     RTCIceServer("stun:stun.l.google.com:19302")
+    # ])
+    # peer = RTCPeerConnection(configuration=configuration)
+    # logger.info("Peer connection created with STUN server configuration.")
     peer = RTCPeerConnection()
+
+    # --- END OF CHANGE ---
 
     @peer.on("track")
     async def on_track(track):
+        logger.info(f"======== TRACK RECEIVED ======== kind={track.kind}, id={track.id}")
+
         if track.kind == "video":
-            codec = getattr(track, 'codec', None)
-            codec_mime = codec.mimeType.lower() if codec else ''
-            if codec_mime == 'video/rtx':
-                logger.info("Ignoring RTX (retransmission) track.")
-                return
+            logger.info("Video track detected. Subscribing to the relay to process frames.")
 
             video_track = VideoProcessorTrack(relay.subscribe(track))
             peer.addTrack(video_track)
@@ -122,14 +141,15 @@ async def create_peer_connection():
             async def consume_track():
                 try:
                     while True:
-                        frame = await video_track.recv()
-                        logger.debug("Frame consumed successfully.")
+                        await video_track.recv()
                 except Exception as e:
-                    logger.error(f"Error consuming video track: {e}")
+                    logger.error(f"Error consuming video track: {e}", exc_info=True)
 
-            video_track = VideoProcessorTrack(relay.subscribe(track))
-            peer.addTrack(video_track)
             asyncio.create_task(consume_track())
+
+        elif track.kind == "audio":
+            logger.info("Audio track received and ignored.")
+            return
 
     @peer.on("datachannel")
     def on_datachannel(channel):
@@ -144,20 +164,16 @@ async def create_peer_connection():
             try:
                 data_payload = json.loads(message_str)
                 timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                x_position, y_position = None, None  # Default to None
+                x_position, y_position = None, None
 
-                # CHANGE: Handle position updates first, regardless of other data
                 if 'current_position' in data_payload and isinstance(data_payload.get('current_position'), dict):
                     pos_data = data_payload['current_position']
                     x_pos = pos_data.get('x')
                     y_pos = pos_data.get('y')
 
-                    # Ensure coordinates are valid numbers before processing
                     if isinstance(x_pos, (int, float)) and isinstance(y_pos, (int, float)):
-                        x_position, y_position = x_pos, y_pos  # Store valid coordinates
+                        x_position, y_position = x_pos, y_pos
                         latest_sensor_data['current_position'] = pos_data
-
-                        # Send the real-time position update for the moving dot
                         position_event_payload = {
                             "event": "robot_position_update",
                             "data": {"x": x_position, "y": y_position}
@@ -165,7 +181,6 @@ async def create_peer_connection():
                         sse_queue.put(json.dumps(position_event_payload))
                         logger.info(f"Pushed position update: x={x_position}, y={y_position}")
 
-                # CHANGE: Handle sensor value updates separately
                 if 'values' in data_payload:
                     sensor_values = data_payload.get('values')
                     should_record_from_payload = data_payload.get('should_record', False)
@@ -173,7 +188,7 @@ async def create_peer_connection():
 
                     logging.info(f"[{timestamp}] DataChannel: Received sensor values: {sensor_values}")
                     logging.info(f"[{timestamp}] DataChannel: formatted sensor values: {formatted_values}")
-                    # Update global store
+
                     latest_sensor_data.update({
                         'data': formatted_values,
                         'should_record': should_record_from_payload,
@@ -182,7 +197,6 @@ async def create_peer_connection():
                     logger.info(
                         f"[{timestamp}] DataChannel: Received sensor data. Record flag: {should_record_from_payload}")
 
-                    # Push sensor data to the line graph
                     if formatted_values:
                         sensor_event_payload = {
                             "event": "sensor_update",
@@ -193,14 +207,12 @@ async def create_peer_connection():
                         }
                         sse_queue.put(json.dumps(sensor_event_payload))
 
-                    # Logic for recording data and classified dots (which requires sensor values)
                     frame_filename = None
                     if should_record_from_payload:
                         if not last_should_record:
                             increment("record_triggers_today")
                             push_metrics_update()
 
-                        # Save frame if available
                         if frame_holder['frame'] is not None and not isinstance(frame_holder['frame'], bytes):
                             image_dir = os.path.join("Temi_Sensor_Data", "frames")
                             os.makedirs(image_dir, exist_ok=True)
@@ -219,7 +231,6 @@ async def create_peer_connection():
                         record_sensor_data_to_csv(sensor_values, timestamp, x_position, y_position, frame_filename)
                         update_csv_metrics()
 
-                        # Classify and push map dot event (requires position AND values)
                         if x_position is not None and y_position is not None and formatted_values:
                             classification = smell_classifier.classify_sensor_data(formatted_values)
                             logger.info(f"[{timestamp}] DataChannel: Classified smell data: {classification}")
@@ -247,7 +258,7 @@ async def create_peer_connection():
     push_metrics_update()
     return peer
 
-# get the fifteen channels from the raw sensor data
+
 def format_data(data):
     # check if data is wrong length or contains any non-numeric values
     if (len(data) != 66) or any(not isinstance(x, (int, float)) for x in data):
@@ -276,51 +287,28 @@ def format_data(data):
     averaged_data.append(filtered_data[-1])  # Humidity
     return averaged_data
 
+
 async def offer(request):
     params = await request.json()
     original_offer_sdp = params["sdp"]
     offer_type = params["type"]
 
-    # Manually remove all RTX lines from SDP
-    sdp_lines = original_offer_sdp.splitlines()
-    filtered_sdp_lines = []
-    skip_payload_types = set()
+    # --- DEBUG LOGGING START ---
+    logger.info("Received new WebRTC offer request.")
+    logger.debug(f"RAW SDP OFFER FROM CLIENT:\n{original_offer_sdp}")
+    # --- DEBUG LOGGING END ---
 
-    for line in sdp_lines:
-        if 'a=rtpmap' in line and 'rtx' in line.lower():
-            # Extract RTX payload type to skip it later
-            payload_type = line.split(' ')[0].split(':')[1]
-            skip_payload_types.add(payload_type)
-            continue  # skip adding RTX lines directly
-        if line.startswith('a=fmtp:'):
-            fmtp_payload_type = line.split(' ')[0].split(':')[1]
-            if fmtp_payload_type in skip_payload_types:
-                continue  # skip RTX fmtp lines
-        filtered_sdp_lines.append(line)
-
-    # Remove RTX payload types from m=video line payload types
-    final_sdp_lines = []
-    for line in filtered_sdp_lines:
-        if line.startswith('m=video'):
-            parts = line.split(' ')
-            # Keep payload types that are not in skip_payload_types
-            m_line_payload_types = [pt for pt in parts[3:] if pt not in skip_payload_types]
-            new_m_line = ' '.join(parts[:3] + m_line_payload_types)
-            final_sdp_lines.append(new_m_line)
-        else:
-            final_sdp_lines.append(line)
-
-    cleaned_offer_sdp = '\r\n'.join(final_sdp_lines) + '\r\n'
-
-    # Use cleaned offer without RTX payloads
-    offer = RTCSessionDescription(sdp=cleaned_offer_sdp, type=offer_type)
-
+    offer = RTCSessionDescription(sdp=original_offer_sdp, type=offer_type)
     peer = await create_peer_connection()
     await peer.setRemoteDescription(offer)
     answer = await peer.createAnswer()
     await peer.setLocalDescription(answer)
 
-    #REPORT: increment every api call
+    # --- DEBUG LOGGING START ---
+    logger.debug(f"SDP ANSWER SENT TO CLIENT:\n{peer.localDescription.sdp}")
+    # --- DEBUG LOGGING END ---
+
+    # REPORT: increment every api call
     increment("http_api_calls")
     push_metrics_update()
 
@@ -329,10 +317,13 @@ async def offer(request):
         "type": peer.localDescription.type
     })
 
+
 app.router.add_post("/offer", offer)
 # -------- Flask video feed server ----------
 flask_app = Flask(__name__)
-CORS(flask_app)  # <-- Enable CORS for all routes
+
+
+# CORS(flask_app)  # <-- Enable CORS for all routes
 
 @flask_app.route('/')
 def index():
@@ -344,11 +335,12 @@ def index():
         if last_pts is None:
             stream_status = "Live"
         elif freeze_detected_time and (duplicate_frame_count > duplicate_threshold or
-                                      current_time - freeze_detected_time > freeze_threshold):
+                                       current_time - freeze_detected_time > freeze_threshold):
             stream_status = "Frozen"
         else:
             stream_status = "Live"
     return render_template('index.html', stream_status=stream_status, last_frame_time=last_frame_time)
+
 
 @flask_app.route('/set-vision-mode', methods=['POST'])
 def set_vision_mode():
@@ -389,6 +381,7 @@ def stream_updates():
 
     return Response(event_stream(), mimetype='text/event-stream')
 
+
 @flask_app.route('/status')
 def get_status():
     frame = frame_holder.get('frame', offline_bytes)
@@ -399,85 +392,33 @@ def get_status():
         if last_pts is None:
             stream_status = "Live"
         elif freeze_detected_time and (duplicate_frame_count > duplicate_threshold or
-                                      current_time - freeze_detected_time > freeze_threshold):
+                                       current_time - freeze_detected_time > freeze_threshold):
             stream_status = "Frozen"
         else:
             stream_status = "Live"
 
-    #REPORT: increment every api call
+    # REPORT: increment every api call
     increment("http_api_calls")
 
     return jsonify({'stream_status': stream_status, 'last_frame_time': last_frame_time})
 
+
 @flask_app.route('/video_feed')
 def video_feed():
-    #REPORT: increment every api call
+    # REPORT: increment every api call
     increment("http_api_calls")
 
     return Response(gen_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
+
 # Global variable to hold latest sensor data
-latest_sensor_data = {"data": None, "timestamp": None, "should_record": False, "current_position": None, "frame_filename": None}
+latest_sensor_data = {"data": None, "timestamp": None, "should_record": False, "current_position": None,
+                      "frame_filename": None}
 
-# Alternative endpoint to receive sensor data from the Temi robot, not used in the current setup
-# @flask_app.route('/sensor-data', methods=['POST'])
-# def sensor_data():
-#     global latest_sensor_data
-#     data = request.json.get('sensor_data')
-#     should_record = request.json.get('should_record', False)
-#     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-#     current_position = request.json.get('current_position', None)
-#
-#     x_position = None
-#     y_position = None
-#     if current_position and isinstance(current_position, dict):
-#         x_position = current_position.get('x')
-#         y_position = current_position.get('y')
-#
-#     frame_filename = None
-#     if should_record and frame_holder['frame'] is not None and not isinstance(frame_holder['frame'], bytes):
-#         # Save the most recent frame
-#         image_dir = os.path.join("Temi_Sensor_Data", "frames")
-#         os.makedirs(image_dir, exist_ok=True)
-#         frame_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')[:-3]  # Milliseconds
-#         frame_filename = f"frame_{frame_timestamp}.jpg"
-#         frame_path = os.path.join(image_dir, frame_filename)
-#         try:
-#             img_to_save = frame_holder['frame'].to_ndarray(format="bgr24")
-#             cv2.imwrite(frame_path, img_to_save)
-#             logger.info(f"Saved frame: {frame_path}")
-#         except Exception as e:
-#             logger.error(f"Error saving frame: {e}")
-#             frame_filename = None  # Reset filename if saving failed
-#
-#
-#     latest_sensor_data = {
-#         "data": data,
-#         "timestamp": timestamp,
-#         "should_record": should_record,
-#         "current_position": current_position,
-#         "frame_filename": frame_filename
-#     }
-#
-#     # # Record to CSV if flag is True
-#     # if should_record:                                 <------ Rest API version to record data from another source
-#     #     record_sensor_data_to_csv(data, timestamp)
-#
-#     #REPORT: increment every api call
-#     increment("http_api_calls")
-#
-#     return jsonify({"status": "Sensor data received"}), 200
-
-# @flask_app.route('/get-latest-sensor-data', methods=['GET'])
-# def get_latest_sensor_data():
-#     #REPORT: increment every api call
-#     increment("http_api_calls")
-#     return jsonify(latest_sensor_data), 200
-#
-# Additional imports for recording
 video_writer = None
 recording = False
 record_lock = threading.Lock()
+
 
 @flask_app.route('/start-recording', methods=['POST'])
 def start_recording():
@@ -490,13 +431,14 @@ def start_recording():
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         filename = f"Temi_VODs/recorded_video_{timestamp}.mp4"
-        video_writer = cv2.VideoWriter(filename, fourcc, 12.0, (640, 480)) # changed to 12 fps
+        video_writer = cv2.VideoWriter(filename, fourcc, 12.0, (640, 480))  # changed to 12 fps
         recording = True
 
-    #REPORT: increment every api call
+    # REPORT: increment every api call
     increment("http_api_calls")
 
     return jsonify({'status': 'recording started', 'filename': filename}), 200
+
 
 @flask_app.route('/stop-recording', methods=['POST'])
 def stop_recording():
@@ -510,39 +452,99 @@ def stop_recording():
         video_writer.release()
         video_writer = None
 
-    #REPORT: increment every api call
+    # REPORT: increment every api call
     increment("http_api_calls")
 
     return jsonify({'status': 'recording stopped'}), 200
 
+
 # === MANUAL TRIGGER ROUTE ===
+# ---MODIFIED---
 @flask_app.route("/send-report-now", methods=["GET"])
 def trigger_report():
-    skip_save = request.args.get("skip_save", "true").lower() != "false"
-    print(f"🚀 Running embedding pipeline before report (skip_save={skip_save})...")
+    # `skip_save` is now `save_file`. If the param is "true", we want to save.
+    save = request.args.get("save", "false").lower() == "true"
+    print(f"🚀 Running t-SNE visualization for report (save_file={save})...")
 
-    data = run_embedding_pipeline(skip_save=skip_save)
+    # The new function returns a dict with the image and metadata
+    data = generate_tsne_visualization(save_file=save)
+
+    if data is None:
+        return jsonify({"status": "failed", "reason": "Could not generate visualization."})
+
     print("📧 Sending report email...")
-
-    # If skip_save is True, pass in-memory data to report
-    if skip_save:
-        success = send_email_report(data)
-    else:
-        success = send_email_report()
+    # Pass the in-memory data directly to the report sender
+    success = send_email_report(report_data=data)
 
     increment("http_api_calls")
 
     return jsonify({"status": "sent" if success else "failed"})
 
 
-# @flask_app.route('/get-classified-data', methods=['GET'])
-# def get_classified_data():
-#     increment("http_api_calls")
-#     return jsonify(classified_data), 200
-
 @flask_app.route('/metrics', methods=['GET'])
 def get_metrics():
     return jsonify(metrics)
+
+
+# ===============================================
+# =========== NEW DEBUG SSE ROUTE ===============
+# ===============================================
+@flask_app.route('/debug-stream')
+def debug_stream():
+    def event_stream():
+        while True:
+            now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+            # 1. Fake Metrics
+            metrics_payload = {
+                "event": "metrics_update",
+                "data": {
+                    'people_detected_today': random.randint(5, 50),
+                    'falls_box': random.randint(0, 5),
+                    'falls_pose': random.randint(0, 5),
+                    'falls_bottom': random.randint(0, 5),
+                    'falls_full': random.randint(0, 5),
+                    'frames_processed': random.randint(1000, 5000),
+                    'new_csv_rows_today': random.randint(100, 500),
+                    'total_csv_rows': random.randint(1000, 5000)
+                }
+            }
+            yield f"event: {metrics_payload['event']}\ndata: {json.dumps(metrics_payload['data'])}\n\n"
+
+            # 2. Fake Sensor Update
+            sensor_payload = {
+                "event": "sensor_update",
+                "data": {
+                    "timestamp": now_str,
+                    "values": [random.uniform(100, 800) for _ in range(15)] + [random.uniform(20, 30),
+                                                                               random.uniform(40, 60)]
+                }
+            }
+            yield f"event: {sensor_payload['event']}\ndata: {json.dumps(sensor_payload['data'])}\n\n"
+
+            # 3. Fake Robot Position
+            position_payload = {
+                "event": "robot_position_update",
+                "data": {"x": random.uniform(-10, -6), "y": random.uniform(-10, -6)}
+            }
+            yield f"event: {position_payload['event']}\ndata: {json.dumps(position_payload['data'])}\n\n"
+
+            # 4. Optional: Map dot
+            dot_payload = {
+                "event": "map_dot_update",
+                "data": {
+                    'x': random.uniform(-10, -6),
+                    'y': random.uniform(-10, -6),
+                    'class': random.choice(['ambient', 'ammonia_detected_debug']),
+                    'timestamp': now_str
+                }
+            }
+            yield f"event: {dot_payload['event']}\ndata: {json.dumps(dot_payload['data'])}\n\n"
+
+            time.sleep(1)  # Send updates every second
+
+    return Response(event_stream(), mimetype='text/event-stream')
+
 
 def gen_frames():
     global last_pts, freeze_detected_time, duplicate_frame_count, last_frame_time, video_writer, recording
@@ -567,8 +569,8 @@ def gen_frames():
         if isinstance(frame, bytes) or frame is None:
             current_state = "frozen"
         elif freeze_detected_time and (
-            duplicate_frame_count > duplicate_threshold or
-            time.time() - freeze_detected_time > freeze_threshold):
+                duplicate_frame_count > duplicate_threshold or
+                time.time() - freeze_detected_time > freeze_threshold):
             current_state = "offline"
 
         if current_state != last_state:
@@ -612,10 +614,14 @@ def gen_frames():
                     height, width = img.shape[:2]
                     half_w, half_h = width // 2, height // 2
 
-                    box_img, box_fallen, person_count, unique_fallers = fall_detector.test_process_frame_box(cv2.resize(img.copy(), (half_w, half_h)))
-                    pose_img, pose_fallen = fall_detector.test_process_frame_pose_fall(cv2.resize(img.copy(), (half_w, half_h)))
-                    bottom_img, bottom_fallen = fall_detector.bottom_frac_fall_detection(cv2.resize(img.copy(), (half_w, half_h)))
-                    combined_img, combined_fallen = fall_detector.combined_frame(cv2.resize(img.copy(), (half_w, half_h)))
+                    box_img, box_fallen, person_count, unique_fallers = fall_detector.test_process_frame_box(
+                        cv2.resize(img.copy(), (half_w, half_h)))
+                    pose_img, pose_fallen = fall_detector.test_process_frame_pose_fall(
+                        cv2.resize(img.copy(), (half_w, half_h)))
+                    bottom_img, bottom_fallen = fall_detector.bottom_frac_fall_detection(
+                        cv2.resize(img.copy(), (half_w, half_h)))
+                    combined_img, combined_fallen = fall_detector.combined_frame(
+                        cv2.resize(img.copy(), (half_w, half_h)))
 
                     now = time.time()
                     if person_count > last_person_count and now - last_person_increment_time > person_cooldown:
@@ -664,7 +670,8 @@ def gen_frames():
                     freeze_detected_time = time.time()
                 elif duplicate_frame_count > duplicate_threshold or time.time() - freeze_detected_time > freeze_threshold:
                     frame_bytes = offline_bytes
-                    logger.info(f"Stream frozen, switching to placeholder after {duplicate_frame_count} duplicates, time elapsed={time.time() - freeze_detected_time:.2f}s")
+                    logger.info(
+                        f"Stream frozen, switching to placeholder after {duplicate_frame_count} duplicates, time elapsed={time.time() - freeze_detected_time:.2f}s")
                 else:
                     duplicate_frame_count += 1
                     if duplicate_frame_count == duplicate_threshold:
@@ -673,10 +680,10 @@ def gen_frames():
         yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
 
 
-
 import csv
 import os
 from datetime import datetime
+
 
 def record_sensor_data_to_csv(sensor_data, timestamp, x_position=None, y_position=None, frame_filename=None):
     """Record sensor data to a master CSV file for long-term accumulation"""
@@ -702,7 +709,8 @@ def record_sensor_data_to_csv(sensor_data, timestamp, x_position=None, y_positio
             writer = csv.writer(csvfile)
 
             if not file_exists:
-                writer.writerow(['timestamp'] + [f'value_{i}' for i in range(66)] + ['x_position', 'y_position', 'frame_filename'])
+                writer.writerow(
+                    ['timestamp'] + [f'value_{i}' for i in range(66)] + ['x_position', 'y_position', 'frame_filename'])
 
             writer.writerow([timestamp] + sensor_data + [x_position, y_position, frame_filename])
 
@@ -732,6 +740,7 @@ def record_sensor_data_to_csv(sensor_data, timestamp, x_position=None, y_positio
 
         else:
             logger.warning(f"Unexpected sensor data format: {type(sensor_data)}. Data not saved.")
+
 
 def trigger_daily_map_clear():
     """Puts a clear map event onto the SSE queue for all clients."""

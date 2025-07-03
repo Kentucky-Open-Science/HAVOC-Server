@@ -1,218 +1,103 @@
+# HAVOC-Server: Temi Monitoring System
 
----
-# Temi Fall Detection & Monitoring System
+This project is a monitoring system for the Healthcare Assistant with Video, Olfaction, and Conversation (HAVOC) program running on the Temi robot. It uses computer vision and machine learning to detect falls, classify smells, and generate daily reports. It provides real-time metrics and visualizations through a web interface, making it ideal for applications in healthcare, safety monitoring, or robotics research.
 
-### By: Zach Bernard, Intern @CAAI from Nov 2024 - May 2025
+## Features
 
----
+- **Fall Detection**: Uses YOLO (You Only Look Once) for real-time detection of falls with multiple methods (bounding box, pose keypoints, and bottom fraction).
+- **Smell Classification**: Employs a K-Nearest Neighbors (KNN) model to classify smells based on sensor data.
+- **Real-Time Streaming**: Streams live video and sensor data from the Temi robot via WebRTC.
+- **Daily Reports**: Generates and sends daily reports with metrics and t-SNE visualizations of smell data.
+- **Web Interface**: Provides an interactive dashboard for monitoring, recording, and visualizing data.
 
-## 📦 Features
+## Installation
 
-### Fall Detection
+1. **Clone the repository**:
 
-* Detects falls using 3 YOLO-based methods:
+   ```bash
+   git clone [insert link]
+   cd HAVOC-Server
+   ```
 
-  * Bounding box (aspect ratio)
-  * Pose keypoint vertical alignment
-  * Bottom-half keypoint analysis
-  * Full consensus if all agree
-* Centroid-based person tracking
-* Fall cooldown + persistence state tracking
-* Unique faller counter
+2. **Create a virtual environment**:
 
-### Video Streaming
+   ```bash
+   python -m venv venv
+   ```
 
-* WebRTC-based live video feed from Temi
-* Fallback image when offline
-* Record MP4 video on demand with timestamped filenames
-* Toggle glasses button for the memes
+3. **Activate the virtual environment**:
 
-### Sensor Data Collection
+   - On Windows:
 
-* Receives JSON sensor payloads from Temi (DataChannel or REST)
-* Live bar chart of sensor values in browser
-* Saves to CSV when `should_record=True`is received from Temi
+     ```bash
+     venv\Scripts\activate
+     ```
 
-### Embedding & Training Pipeline
+   - On macOS/Linux:
 
-* Autoencoder-based smell embedding system
-* Daily ambient + target embedding generation
-* Fine-tunes on today's ambient data if available
-* Generates t-SNE plot visualizing clustering
-* Silhouette score and reconstruction loss calculation
-* Optional `--skip-save` mode for testing without file writes
-* Combines historical embeddings for progressive model tracking
+     ```bash
+     source venv/bin/activate
+     ```
 
-### Daily Metrics Reporting
+4. **Install the required dependencies**:
 
-* Tracks:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-  * Sensor triggers, CSV row count
-  * All fall detection types
-  * Frames processed, people detected
-  * Unique fallers
-  * Stream uptime (live/frozen/offline)
-  * API/WebRTC connection metrics
-* HTML report emailed daily via SMTP
-* Manually trigger via `/send-report-now` route, SENDS TO ALL ON `TEMI_EMAIL_RECIPIENTS`.
-* E-mail list in `.env`
+5. **Additional Setup**:
 
-### Web UI
+   - Download the YOLO model weights (`yolo11n-pose.pt`) and place them in the `yolo_weights/` directory.
 
-* Tailwind CSS dashboard
-* Live stream viewer + recording controls
-* Real-time fall & metric updates
-* Sensor data chart (Chart.js)
-* Additional frontend integration in TV-react repo
+   - Set up environment variables in a `.env` file:
 
----
+     ```plaintext
+     TEMI_EMAIL_SENDER=your-email@gmail.com
+     TEMI_EMAIL_PASSWORD=your-app-specific-password
+     TEMI_EMAIL_RECIPIENTS=recipient1@example.com,recipient2@example.com
+     TEMI_REPORT_TIME=20:00
+     ```
 
-## 🚀 Quick Start
+   - Ensure the `static/newSensor_training.csv` file exists for smell classification training data.
 
-### 1. Clone Repo & Install Requirements
+## Running the Application
 
-```bash
-git clone https://github.com/innovationcore/temiStreamCatch.git
-cd temi-monitoring
-pip install -r requirements.txt
-```
-
-### 2. Set Up `.env`
-
-```env
-TEMI_EMAIL_SENDER=your_email@gmail.com
-TEMI_EMAIL_PASSWORD=your_app_password
-TEMI_EMAIL_RECIPIENTS=you@example.com,team@example.com
-TEMI_REPORT_TIME=20:00
-```
-
-### 3. Start the Server
+To start the server, run:
 
 ```bash
 python server.py
 ```
 
----
+- The Flask server will start on `http://0.0.0.0:8133`, serving the web interface.
+- The aiohttp signaling server for WebRTC will start on `http://0.0.0.0:5432`.
 
-## 🔁 Scheduled Tasks
+Open your web browser and navigate to `http://localhost:8133` to access the web interface.
 
-Both the embedding pipeline and report generation are scheduled daily:
+## Usage
 
-* Embedding pipeline runs 5 minutes before `TEMI_REPORT_TIME`
-* Report generates and sends at `TEMI_REPORT_TIME`
+The web interface (`index.html`) provides several interactive sections:
 
-### Manual Trigger (SENDS TO ALL ON `TEMI_EMAIL_RECIPIENTS`)
+- **Stream**: Displays the live video feed from the Temi robot, with fall detection overlays in four quadrants (Box, Pose, Bottom, Combined).
+- **Recording**: Start/stop video recording using the buttons. Recordings are saved in `Temi_VODs/`.
+- **Vision Modes**: Toggle "Glasses" (adds a fun glasses/mustache overlay) or "Fullscreen" modes.
+- **Map**: Shows the Temi robot's location on a suite map, with dots indicating smell detections (requires the map image from Temi).
+- **Metrics**: Displays real-time metrics, including:
+  - People detected today
+  - Falls detected (Box, Pose, Bottom, Full Consensus)
+  - Frames processed
+  - Smell classifications
+- **Smell Data**: Shows the last two hours of smell data with timestamps, updated via Server-Sent Events (SSE).
 
-To manually test pipeline + report without saving:
 
-```bash
-http://localhost:8133/send-report-now
-```
+## System Architecture
 
-To run and save output:
+The system is composed of several key modules:
 
-```bash
-http://localhost:8133/send-report-now?skip_save=false
-```
-
----
-
-## 🧪 Training Pipeline CLI
-
-You can also run the embedding pipeline from the command line:
-
-```bash
-python training_pipeline.py --test-mode       # Save output locally but show debug output
-python training_pipeline.py --skip-save       # Skip saving, useful for testing
-```
-
----
-
-## 🗂 Project Structure
-
-```
-.
-├── server.py              # Flask server + WebRTC receiver
-├── daily_reports.py       # Metrics tracking + report email logic
-├── training_pipeline.py   # Autoencoder training and t-SNE generation
-├── record_smells.py       # Receives smell data over WebRTC or REST
-├── yolo_fall_detection.py # Pose and box-based fall detection
-├── fall_tracking.py       # Centroid tracker for fall state
-├── templates/index.html   # Frontend dashboard (Tailwind UI)
-├── Temi_Sensor_Data/      # CSV logs of sensor data
-├── Temi_VODs/             # Recorded video files
-├── embeddings/            # Daily + master embedding vectors and metadata
-├── visualizations/        # t-SNE plots
-├── models/                # Trained autoencoder weights
-└── static/                # Offline fallback images
-```
-
----
-
-## 📐 System Architecture
-
-```text
-                      +----------------------+
-                      |     Temi Robot       |
-                      |  (Video + Sensors)   |
-                      +----------+-----------+
-                                 |
-                       WebRTC Video + Sensor Stream
-                                 |
-                 +---------------v---------------+
-                 |            server.py          |
-                 |-------------------------------|
-                 | - WebRTC video handling       |
-                 | - REST API for sensor input   |
-                 | - Fall detection + CSV writer |
-                 | - Routes: /offer, /status...  |
-                 +---------------+---------------+
-                                 |
-                 +---------------v----------------+
-                 |       yolo_fall_detection.py   |
-                 |--------------------------------|
-                 | - 3-mode fall detection        |
-                 | - Pose, box, and bottom logic  |
-                 +---------------+----------------+
-                                 |
-        +------------------------v-------------------------+
-        |             training_pipeline.py                 |
-        |--------------------------------------------------|
-        | - Autoencoder model for embeddings               |
-        | - Combines daily and historical embeddings       |
-        | - Generates visualizations + metrics             |
-        +------------------------+-------------------------+
-                                 |
-        +------------------------v-------------------------+
-        |               daily_reports.py                   |
-        |--------------------------------------------------|
-        | - Tracks API/fall metrics                        |
-        | - HTML report generation                         |
-        | - Sends via email daily or on demand             |
-        +------------------------+-------------------------+
-```
-
-## TODO
-* Ensure training pipeline accuracy day to day
-  
-  Make sure that when finetuning with a new days data that the report ebing sent includes the cumulative training data when makingthe t-sne.
-
-* Record better and more useful target data
-  
-  The current target data is from a smell sensor placed right above a coffee cup so this might not be the best data to test against (although getting some promising results so far).
-
-* Front end graph adjustments
-
-  The graph on the frontend could use some adjustments, sometimes throughout the day the values are off the charts so it might be better to decrease the `    const sensitivityFactor = 100` (100x).
-
-* Create single feed toggle
-
-  Create a front end toggle mode to turn the video render to only display one clean video stream, similar to glasses mode. this allows for the best recording/viewing experience for Demos and such.
-
-* Video recording FPS
-
-  The FPS of the recorded videos isnt quite right, when I tested it was always either too fast or too slow, so some finetuning by way of frame recieved averaging might be nice.
-
-* E-mail list Form
-
-  Currently the only way to add users to the email list is to manually go into the `.env` file and append the new user to the `TEMI_EMAIL_RECIPIENTS` list. This is fine but for demo purposes it might be nice for people to add themselves from the TV (Make sure to account for people wanting to remove themselves).
+- `yolo_fall_detection.py`: Implements fall detection using YOLO, with methods for bounding box, pose keypoints, and bottom fraction analysis.
+- `report_visualizer.py`: Generates t-SNE visualizations comparing daily sensor data with training data.
+- `plot_points_pixel.py`: Plots the robot’s position and smell detections on a map image.
+- `smell_classifier.py`: Classifies smells using a KNN model trained on sensor data.
+- `server.py`: Manages WebRTC streaming, Flask web server, and real-time data processing.
+- `fall_tracking.py`: Tracks fall events over time, maintaining unique faller counts.
+- `daily_reports.py`: Generates and sends daily reports via email, including metrics and visualizations.
+- `index.html`: The frontend interface providing a user-friendly dashboard.
