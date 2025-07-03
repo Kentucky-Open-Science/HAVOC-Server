@@ -10,7 +10,8 @@ from email.mime.multipart import MIMEMultipart
 from flask import Flask, jsonify, request
 from dotenv import load_dotenv
 import json
-from training_pipeline import run_embedding_pipeline
+# ---MODIFIED---
+from report_visualizer import generate_tsne_visualization
 
 # === LOAD ENVIRONMENT VARIABLES ===
 load_dotenv()
@@ -22,7 +23,8 @@ EMAIL_SENDER = os.getenv("TEMI_EMAIL_SENDER")
 EMAIL_PASSWORD = os.getenv("TEMI_EMAIL_PASSWORD")
 EMAIL_RECIPIENTS = os.getenv("TEMI_EMAIL_RECIPIENTS", "").split(",")
 REPORT_TIME = os.getenv("TEMI_REPORT_TIME", "20:00")  # Default to 8 PM
-EMBEDDINGS_DIR = "embeddings"
+# ---REMOVED---
+# EMBEDDINGS_DIR = "embeddings"
 VISUALS_DIR = "visualizations"
 
 # === METRIC TRACKERS ===
@@ -45,33 +47,40 @@ metrics = {
     "http_api_calls": 0
 }
 
+
 # === TRACKER UPDATE FUNCTIONS (called from server.py) ===
 def increment(key):
     if key in metrics:
         metrics[key] += 1
 
+
 def add_time(key, seconds):
     if key in metrics:
         metrics[key] += seconds
 
+
 def set_total_csv_rows(count):
     metrics["total_csv_rows"] = count
+
 
 def reset_daily_metrics():
     for key in metrics:
         if key.endswith("today") or key in ["frames_processed", "falls_box", "falls_pose", "falls_bottom", "falls_full",
-                                             "people_detected_today", "stream_offline_count", "stream_frozen_count",
-                                             "stream_live_seconds", "stream_frozen_seconds", "stream_offline_seconds",
-                                             "webrtc_connections", "http_api_calls"]:
+                                            "people_detected_today", "stream_offline_count", "stream_frozen_count",
+                                            "stream_live_seconds", "stream_frozen_seconds", "stream_offline_seconds",
+                                            "webrtc_connections", "http_api_calls"]:
             metrics[key] = 0
+
 
 # === METRIC EXTRACTION ===
 def calculate_file_size(path):
     return round(os.path.getsize(path) / (1024 * 1024), 2) if os.path.exists(path) else 0
 
+
 def get_disk_space():
     total, used, free = shutil.disk_usage("/")
     return round(free / (1024 ** 3), 2)  # in GB
+
 
 def update_csv_metrics():
     today = datetime.now().date()
@@ -90,6 +99,7 @@ def update_csv_metrics():
     metrics["total_csv_rows"] = row_count
     import server
     server.push_metrics_update()
+
 
 def get_video_metrics():
     count_total = 0
@@ -112,6 +122,7 @@ def get_video_metrics():
     total_size_mb = round(total_size / (1024 * 1024), 2)
     return count_total, count_today, total_size_mb
 
+
 def format_seconds(seconds):
     seconds = int(seconds)
     hours = seconds // 3600
@@ -119,8 +130,10 @@ def format_seconds(seconds):
     secs = seconds % 60
     return f"{hours:02}:{minutes:02}:{secs:02}"
 
+
 # === EMAIL REPORT GENERATION ===
-def generate_html_report(metadata=None, img_base64=None):
+# ---MODIFIED---
+def generate_html_report(report_data=None):
     update_csv_metrics()
     count_total, count_today, total_size = get_video_metrics()
     disk_free = get_disk_space()
@@ -172,54 +185,38 @@ def generate_html_report(metadata=None, img_base64=None):
             <li><strong>Disk space remaining:</strong> {disk_free} GB</li>
         </ul>
     """
-    # === Embedding Metrics Section ===
-    if metadata and img_base64:
+    # === t-SNE Visualization Section ===
+    img_base64 = None
+    if report_data:
+        img_base64 = report_data.get("tsne_image_base64")
+        metadata = report_data.get("metadata")
         html += f"""
-        <h3>🧠 Embedding Metrics (In-Memory)</h3>
-        <ul>
-            <li><strong>Ambient Rows:</strong> {metadata['ambient_rows']}</li>
-            <li><strong>Target Rows:</strong> {metadata['target_rows']}</li>
-            <li><strong>Silhouette Score:</strong> {metadata['silhouette_score']:.4f}</li>
-            <li><strong>Loss:</strong> {metadata['loss']:.4f}</li>
-        </ul>
+        <h3>🔬 Smell Data Visualization (t-SNE)</h3>
+        <p>Comparison of <strong>{metadata['daily_readings_count']}</strong> daily readings against <strong>{metadata['training_samples_count']}</strong> training samples.</p>
         <img src="data:image/png;base64,{img_base64}" alt="t-SNE Plot" style="max-width:100%; border:1px solid #ccc; padding:5px;" />
         """
     else:
-        date_str = datetime.now().date().isoformat()
-        json_path = os.path.join("embeddings", f"{date_str}.json")
-        img_path = os.path.join("visualizations", f"tsne_{date_str}.png")
-
-        if os.path.exists(json_path):
-            with open(json_path) as f:
-                embedding_data = json.load(f)
-
-            html += f"""
-            <h3>🧠 Embedding Metrics</h3>
-            <ul>
-                <li><strong>Ambient Rows:</strong> {embedding_data['ambient_rows']}</li>
-                <li><strong>Target Rows:</strong> {embedding_data['target_rows']}</li>
-                <li><strong>Silhouette Score:</strong> {embedding_data['silhouette_score']:.4f}</li>
-                <li><strong>Loss:</strong> {embedding_data['loss']:.4f}</li>
-            </ul>
-            """
-        else:
-            html += "<h3>🧠 Embedding Metrics</h3><p style='color:red;'>No embedding metadata available.</p>"
-
+        # Fallback for scheduled reports that load from disk
+        img_path = os.path.join(VISUALS_DIR, f"tsne_{date_str}.png")
         if os.path.exists(img_path):
             with open(img_path, "rb") as img_f:
                 img_base64 = base64.b64encode(img_f.read()).decode('utf-8')
-            html += f"<img src='data:image/png;base64,{img_base64}' alt='t-SNE Plot' style='max-width:100%; border:1px solid #ccc; padding:5px;'/>"
+            html += f"""
+            <h3>🔬 Smell Data Visualization (t-SNE)</h3>
+            <p>Daily readings compared against established training data.</p>
+            <img src='data:image/png;base64,{img_base64}' alt='t-SNE Plot' style='max-width:100%; border:1px solid #ccc; padding:5px;'/>
+            """
         else:
-            html += "<p style='color:red;'>No t-SNE image available.</p>"
+            html += "<h3>🔬 Smell Data Visualization (t-SNE)</h3><p style='color:red;'>No t-SNE image available for today.</p>"
 
+    html += "</body></html>"
     return html
 
-def send_email_report(pipeline_data=None):
-    metadata = pipeline_data.get("metadata") if pipeline_data else None
-    img_base64 = pipeline_data.get("tsne_image_base64") if pipeline_data else None
 
+# ---MODIFIED---
+def send_email_report(report_data=None):
     subject = f"Temi Server Report - {datetime.now().strftime('%Y-%m-%d')}"
-    html = generate_html_report(metadata, img_base64)
+    html = generate_html_report(report_data)
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
@@ -237,6 +234,7 @@ def send_email_report(pipeline_data=None):
         print(f"❌ Failed to send daily report: {e}")
         return False
 
+
 # === SCHEDULER ===
 def schedule_daily_report():
     now = datetime.now()
@@ -249,11 +247,14 @@ def schedule_daily_report():
     threading.Timer(delay, run_and_reschedule).start()
     print(f"📅 Daily report scheduled in {round(delay / 60)} minutes.")
 
+
 def run_and_reschedule():
-    print("⏱ Running embedding pipeline before daily report...")
-    run_embedding_pipeline()  # Always save during scheduled run
+    print("⏱ Running t-SNE visualization for daily report...")
+    # For the scheduled run, we always save the image to disk.
+    generate_tsne_visualization(save_file=True)
 
     print("📧 Sending report email...")
+    # The send function will load the saved image from disk.
     send_email_report()
 
     reset_daily_metrics()

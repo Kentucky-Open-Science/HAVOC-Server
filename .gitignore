@@ -10,3 +10,8 @@ embeddings
 visualizations
 models
 /Local_Sensor_Data/
+testYOLO.py
+record_smells2.py
+Temi_Sensor_Data/target_smell.csv
+record_smells.py
+/map/

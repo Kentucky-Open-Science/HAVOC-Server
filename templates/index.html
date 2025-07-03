@@ -306,7 +306,6 @@
 
         // 4. Connect to SSE for real-time updates
         let eventSource = new EventSource('/stream-updates');
-        //let eventSource = new EventSource('/debug-stream');
         eventSource.onopen = () => console.log('SSE connection opened.');
 
         eventSource.addEventListener('metrics_update', e => updateMetrics(JSON.parse(e.data)));

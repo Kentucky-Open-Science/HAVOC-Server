@@ -3,7 +3,7 @@ from sklearn.neighbors import KNeighborsClassifier
 
 
 class SmellClassifier:
-    def __init__(self, dataset_path='static/newSensor_training.csv'):
+    def __init__(self, dataset_path='Temi_Sensor_Data/newSensor_training.csv'):
         # Load the dataset
         dataset = pd.read_csv(dataset_path)
         self.dataset = self.process_dataframe(dataset)
