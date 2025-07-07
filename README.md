@@ -2,6 +2,9 @@
 
 This project is a monitoring system for the [Healthcare Assistant with Video, Olfaction, and Conversation (HAVOC)](https://github.com/innovationcore/HAVOC-TemiApp) program running on the Temi robot. It uses computer vision and machine learning to detect falls, classify smells, and generate daily reports. It provides real-time metrics and visualizations through a web interface, making it ideal for applications in healthcare, safety monitoring, or robotics research.
 
+![image](https://github.com/user-attachments/assets/780c326d-4e2e-4e4b-9dfe-45815f9a0309)
+
+
 ## Features
 
 - **Fall Detection**: Uses YOLO (You Only Look Once) for real-time detection of falls with multiple methods (bounding box, pose keypoints, and bottom fraction).
