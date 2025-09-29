@@ -16,3 +16,5 @@ Temi_Sensor_Data/target_smell.csv
 record_smells.py
 /map/
 /.idea/
+.venv
+*.log
