@@ -3,15 +3,244 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>Stream Monitor</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stream Monitor Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <style>
+        html, body {
+            height: 100vh;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        .dashboard-container {
+            height: 100vh;
+            display: grid;
+            grid-template-rows: auto 1fr;
+            background: rgb(30, 64, 175);
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            padding: 0 1rem 1rem 1rem;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        .left-panel, .right-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        .video-section {
+            flex: 1;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .video-container {
+            flex: 1;
+            min-height: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #f3f4f6;
+            border-radius: 0.5rem;
+            overflow: hidden;
+        }
+
+        .video-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .map-section {
+            height: 45%;
+            min-height: 0;
+        }
+
+        .metrics-section {
+            height: 10%;
+            min-height: 0;
+            overflow-y: auto;
+        }
+
+        .chart-section {
+            height: 45%;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chart-container {
+            flex: 1;
+            min-height: 0;
+            position: relative;
+        }
+
+        .ascii-header {
+            padding: 0.5rem;
+            overflow-x: auto;
+            overflow-y: hidden;
+        }
+
+        .ascii-header pre {
+            font-size: clamp(0.5rem, 3vw, 2rem);
+            line-height: 1;
+            margin: 0;
+        }
+
+        .panel-box {
+            background: #f3f4f6;
+            border: 2px solid rgb(30, 64, 175);
+            border-radius: 0.5rem;
+            padding: 0.75rem;
+            /*height: 100%;*/
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            justify-content: center;
+            padding: 0.5rem;
+        }
+
+        .control-button {
+            padding: 0.5rem 1rem;
+            border-radius: 0.25rem;
+            color: white;
+            font-size: clamp(1rem, 2vw, 1.5rem);
+            white-space: nowrap;
+            transition: all 0.2s;
+        }
+
+        .status-text {
+            font-size: clamp(1.25rem, 2.5vw, 2rem);
+            margin: 0.25rem 0;
+        }
+
+        .metric-item {
+            font-size: clamp(0.875rem, 1.75vw, 1.25rem);
+            margin: 0.1rem 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .section-title {
+            font-size: clamp(1.25rem, 2.5vw, 2rem);
+            font-weight: bold;
+            margin-bottom: 0.25rem;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+                grid-template-rows: 1fr 1fr;
+            }
+
+            .ascii-header pre {
+                font-size: 0.6rem;
+            }
+
+            .metrics-section {
+                height: 20%;
+            }
+        }
+
+        @media (max-height: 600px) {
+            .map-section { height: 45%; }
+            .metrics-section { height: 10%; }
+        }
+
+        /* For very large screens (TVs) */
+        @media (min-width: 1920px) {
+            .status-text {
+                font-size: clamp(2rem, 3vw, 3rem);
+            }
+
+            .metric-item {
+                font-size: clamp(1.5rem, 2vw, 2rem);
+            }
+
+            .section-title {
+                font-size: clamp(2rem, 3vw, 3rem);
+            }
+
+            .control-button {
+                font-size: clamp(1.5rem, 2.5vw, 2.5rem);
+                padding: 0.75rem 1.5rem;
+            }
+
+            .ascii-header pre {
+                font-size: clamp(1.5rem, 4vw, 3rem);
+            }
+            .legend-item {
+                font-size: clamp(1.5rem, 2.5vw, 2rem);
+            }
+        }
+
+        .map-container-wrapper {
+            position: relative;
+            width: 100%;
+            height: calc(100% - 3rem);
+            overflow: hidden;
+        }
+
+        .map-legend {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-top: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            font-size: clamp(0.875rem, 1.75vw, 1.25rem);
+        }
+
+        .legend-dot {
+            width: clamp(12px, 1.5vw, 20px);
+            height: clamp(12px, 1.5vw, 20px);
+            border-radius: 50%;
+            border: 1px solid white;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0.5rem;
+            font-size: clamp(0.875rem, 1.75vw, 1.25rem);
+        }
+
+        .timestamp-text {
+            font-size: clamp(0.875rem, 1.5vw, 1.25rem);
+        }
+    </style>
 </head>
 
-<body class="bg-blue-800 min-h-screen text-[2rem] md:text-[2.5rem] leading-relaxed flex flex-col">
-    <div class="ascii-art text-center py-8">
-        <pre class="text-4xl md:text-6xl font-mono text-gray-100 overflow-auto">
+<body>
+    <div class="dashboard-container">
+        <!-- ASCII Art Header -->
+        <div class="ascii-header text-center">
+            <pre class="font-mono text-gray-100">
 ╔══════════════════════════════════════════════════════════════════════════════════╗
 ║  ████████╗███████╗███╗   ███╗██╗    ██████╗  ██████╗ ██████╗  ██████╗ ████████╗  ║
 ║  ╚══██╔══╝██╔════╝████╗ ████║██║    ██╔══██╗██╔═══██╗██╔══██╗██╔═══██╗╚══██╔══╝  ║
@@ -20,93 +249,99 @@
 ║     ██║   ███████╗██║ ╚═╝ ██║██║    ██║  ██║╚██████╔╝██████╔╝╚██████╔╝   ██║     ║
 ║     ╚═╝   ╚══════╝╚═╝     ╚═╝╚═╝    ╚═╝  ╚═╝ ╚═════╝ ╚═════╝  ╚═════╝    ╚═╝     ║
 ╚══════════════════════════════════════════════════════════════════════════════════╝
-        </pre>
-    </div>
+            </pre>
+        </div>
 
-    <div class="flex flex-col md:flex-row gap-8 px-8 flex-grow">
-        <div class="w-full md:w-1/2 flex flex-col">
-            <div class="bg-gray-100 border-2 border-blue-800 rounded shadow p-8 flex-grow">
-                <img src="{{ url_for('video_feed') }}" alt="Video Stream" class="w-full h-[70vh] object-contain rounded">
-                <div class="mt-6 text-center">
-                    <p class="text-6xl">Stream: <span id="stream_status">{{ stream_status }}</span></p>
-                    <p class="text-5xl">Recording: <span id="recording-status">Not Recording</span></p>
-                    <p class="text-5xl text-gray-600">Last Frame: <span id="last_frame_time">{{ last_frame_time }}</span></p>
+        <!-- Main Content Grid -->
+        <div class="main-content">
+            <!-- Left Panel -->
+            <div class="left-panel">
+                <div class="video-section panel-box">
+                    <div class="video-container">
+                        <img src="{{ url_for('video_feed') }}" alt="Video Stream">
+                    </div>
+                    <div class="text-center mt-2">
+                        <p class="status-text">Stream: <span id="stream_status" class="font-bold">{{ stream_status }}</span></p>
+                        <p class="status-text">Recording: <span id="recording-status" class="font-bold">Not Recording</span></p>
+                        <p class="status-text text-gray-600">Last Frame: <span id="last_frame_time">{{ last_frame_time }}</span></p>
+                    </div>
+                    <div class="button-group">
+                        <button id="start-recording" class="control-button bg-green-500 hover:bg-green-600">Start Recording</button>
+                        <button id="stop-recording" class="control-button bg-red-500 hover:bg-red-600">Stop Recording</button>
+                        <button id="toggle-mode" class="control-button bg-blue-500 hover:bg-blue-600">Glasses</button>
+                        <button id="toggle-fullscreen" class="control-button bg-purple-500 hover:bg-purple-600">Fullscreen</button>
+                    </div>
                 </div>
-                <div class="w-full flex justify-center mb-8 mt-6">
-                    <div class="bg-gray-100 p-4 rounded shadow text-center">
-                        <div class="flex flex-row justify-center items-center space-x-4">
-                            <button id="start-recording" class="bg-green-500 text-white text-6xl px-4 py-2 rounded hover:bg-green-600">Start Recording</button>
-                            <button id="stop-recording" class="bg-red-500 text-white text-6xl px-4 py-2 rounded hover:bg-red-600">Stop Recording</button>
-                            <button id="toggle-mode" class="bg-blue-500 text-white text-6xl px-4 py-2 rounded shadow hover:bg-blue-600">Glasses</button>
-                            <button id="toggle-fullscreen" class="bg-purple-500 text-white text-6xl px-4 py-2 rounded shadow hover:bg-purple-600">Fullscreen</button>
+            </div>
+
+            <!-- Right Panel -->
+            <div class="right-panel">
+                <!-- Map Section -->
+                <div class="map-section panel-box">
+                    <h2 class="section-title text-center">Temi's Location</h2>
+                    <div class="map-container-wrapper">
+                        <div id="map-container" style="position: relative; width: 100%; height: 100%;">
+                            <img id="map-image" src="../static/map.png" alt="Temi Robot Map"
+                                 style="width: 100%; height: 100%; object-fit: fill;">
+                            <div id="classification-dots-container"
+                                 style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></div>
+                            <div id="robot-dot"
+                                 style="position: absolute; width: 20px; height: 20px; background-color: darkblue;
+                                        border-radius: 50%; transform: translate(-50%, -50%); display: none;"></div>
+                        </div>
+                    </div>
+                    <div class="map-legend">
+                        <div class="legend-item">
+                            <span class="legend-dot" style="background-color: darkblue;"></span>
+                            <span>Current Position</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-dot" style="background-color: #dc2626;"></span>
+                            <span>Ammonia</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-dot" style="background-color: #16a34a;"></span>
+                            <span>No Ammonia</span>
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
-    </div>
 
-      <!-- Right Section: Map, Metrics, and Sensor Plot -->
-        <div class="w-full md:w-1/2 flex flex-col gap-8">
-            <div class="bg-gray-100 border-2 border-blue-800 rounded shadow p-8">
-                <h2 class="text-6xl font-semibold text-center mb-6">Temi's Location on Suite Map</h2>
-                <div id="map-container" style="position: relative; width: 100%; max-width: 2400px; margin: auto;">
-                    <img id="map-image" src="../static/map.png" alt="Temi Robot Map" style="width: 100%; height: auto; display: block; margin: auto;">
-                    <div id="classification-dots-container" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></div>
-                    <div id="robot-dot" style="position: absolute; width: 30px; height: 30px; background-color: darkblue; border-radius: 50%; transform: translate(-50%, -50%); display: none;"></div>
-                </div>
-                <div class="mt-4 flex justify-center items-center gap-x-6">
-                    <div class="flex items-center gap-x-2">
-                        <span class="h-5 w-5 rounded-full bg-blue-800 border-2 border-white"></span>
-                        <p class="text-5xl text-gray-800">Temi's Current Position</p>
-                    </div>
-                    <div class="flex items-center gap-x-2">
-                        <span class="h-5 w-5 rounded-full bg-red-600 border-2 border-white"></span>
-                        <p class="text-5xl text-gray-800">Ammonia Detected</p>
-                    </div>
-                    <div class="flex items-center gap-x-2">
-                        <span class="h-5 w-5 rounded-full bg-green-600 border-2 border-white"></span>
-                        <p class="text-5xl text-gray-800">No Ammonia Detected</p>
+                <!-- Metrics Section - Made more compact -->
+                <div class="metrics-section panel-box">
+                    <h2 class="section-title text-center">📈 Metrics</h2>
+                    <div id="metrics-display" class="metrics-grid">
+                        <p class="metric-item"><strong>People:</strong> <span id="people_detected_today">-</span></p>
+                        <p class="metric-item"><strong>Box:</strong> <span id="falls_box">-</span></p>
+                        <p class="metric-item"><strong>Pose:</strong> <span id="falls_pose">-</span></p>
+                        <p class="metric-item"><strong>Bottom:</strong> <span id="falls_bottom">-</span></p>
+                        <p class="metric-item"><strong>Full:</strong> <span id="falls_full">-</span></p>
+                        <p class="metric-item"><strong>Frames:</strong> <span id="frames_processed">-</span></p>
+                        <p class="metric-item"><strong>Smells:</strong> <span id="new_csv_rows_today">-</span></p>
+                        <p class="metric-item"><strong>Total:</strong> <span id="total_csv_rows">-</span></p>
                     </div>
                 </div>
-            </div>
-        </div>
 
-            <div class="flex flex-col gap-8">
-                <div class="bg-gray-100 border-2 border-blue-800 rounded shadow p-8">
-                    <h2 class="text-6xl font-semibold mb-6 text-center">📈 Real-Time Metrics</h2>
-                    <div id="metrics-display" class="grid grid-cols-4 gap-x-6 gap-y-4 text-4xl text-gray-800">
-                        <p><strong>People Detected Today:</strong> <span id="people_detected_today">-</span></p>
-                        <p><strong>Falls (Box):</strong> <span id="falls_box">-</span></p>
-                        <p><strong>Falls (Pose):</strong> <span id="falls_pose">-</span></p>
-                        <p><strong>Falls (Bottom):</strong> <span id="falls_bottom">-</span></p>
-                        <p><strong>Falls (Full):</strong> <span id="falls_full">-</span></p>
-                        <p><strong>Frames Processed:</strong> <span id="frames_processed">-</span></p>
-                        <p><strong>Smells Detected Today:</strong> <span id="new_csv_rows_today">-</span></p>
-                        <p><strong>Total Smells:</strong> <span id="total_csv_rows">-</span></p>
-                    </div>
-                </div>
-                <div class="bg-gray-100 border-2 border-blue-800 rounded shadow p-8 flex flex-col flex-grow">
-                    <h2 class="text-6xl font-semibold text-center">Last Two Hours of Smell Data</h2>
-                    <p class="text-5xl text-gray-600 text-center mb-6">Timestamp: <span id="sensor_timestamp">-</span></p>
-                    <div class="flex-grow overflow-hidden">
-                        <canvas id="sensorChart" class="w-full h-full"></canvas>
+                <!-- Chart Section - Gets more space now -->
+                <div class="chart-section panel-box">
+                    <h2 class="section-title text-center">Smell Data (2 Hours)</h2>
+                    <p class="text-center text-gray-600 timestamp-text">
+                        Timestamp: <span id="sensor_timestamp">-</span>
+                    </p>
+                    <div class="chart-container">
+                        <canvas id="sensorChart"></canvas>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-</div>
 
 <script>
     // --- GLOBAL STATE ---
     let sensorChart;
-    const twoHourWindow = 2 * 60 * 60 * 1000; // 2 hours in milliseconds
-
+    const twoHourWindow = 2 * 60 * 60 * 1000;
     let glassesMode = false;
     let fullscreenMode = false;
     let recording = false;
-
     let toggleTimeout;
     let fullscreenTimeout;
 
@@ -115,20 +350,28 @@
         if (sensorChart) return;
 
         const ctx = document.getElementById('sensorChart').getContext('2d');
-        const lineColors = ['#FF6384', '#36A2EB', '#FFCE56', '#08d5bd', '#9966FF', '#FF9F40', '#8C564B', '#E83E8C', '#20C997', '#6610F2', '#fd9814', '#17A2B8', '#6F42C1', '#DC3545', '#c242f0', '#0072B2', '#D55E00'];
+        const lineColors = ['#FF6384', '#36A2EB', '#FFCE56', '#08d5bd', '#9966FF', '#FF9F40',
+                           '#8C564B', '#E83E8C', '#20C997', '#6610F2', '#fd9814', '#17A2B8',
+                           '#6F42C1', '#DC3545', '#c242f0', '#0072B2', '#D55E00'];
 
         const datasets = Array.from({ length: 17 }, (_, i) => {
-            let label = i < 15 ? `Sensor Group ${i + 1}` : (i === 15 ? 'Temperature' : 'Humidity');
+            let label = i < 15 ? `S${i + 1}` : (i === 15 ? 'Temp' : 'Humid');
             return {
                 label: label,
                 data: [],
                 borderColor: lineColors[i],
                 backgroundColor: lineColors[i],
                 fill: false,
-                borderWidth: 2,
-                pointRadius: 1,
+                borderWidth: 1,
+                pointRadius: 0,
             };
         });
+
+        // Determine font sizes based on screen size
+        const isLargeScreen = window.innerWidth >= 1920;
+        const titleSize = isLargeScreen ? 20 : 14;
+        const labelSize = isLargeScreen ? 16 : 11;
+        const tickSize = isLargeScreen ? 14 : 10;
 
         sensorChart = new Chart(ctx, {
             type: 'line',
@@ -139,18 +382,39 @@
                 scales: {
                     x: {
                         type: 'time',
-                        time: { unit: 'minute', tooltipFormat: 'll HH:mm:ss', displayFormats: { minute: 'HH:mm' } },
-                        title: { display: true, text: 'Timestamp', font: { size: 30 } },
-                        ticks: { font: { size: 20 } }
+                        time: {
+                            unit: 'minute',
+                            tooltipFormat: 'HH:mm:ss',
+                            displayFormats: { minute: 'HH:mm' }
+                        },
+                        title: {
+                            display: true,
+                            text: 'Time',
+                            font: { size: titleSize }
+                        },
+                        ticks: { font: { size: tickSize } }
                     },
                     y: {
-                        title: { display: true, text: 'Sensor Value', font: { size: 30 } },
-                        ticks: { font: { size: 20 } }
+                        title: {
+                            display: true,
+                            text: 'Value',
+                            font: { size: titleSize }
+                        },
+                        ticks: { font: { size: tickSize } }
                     }
                 },
                 plugins: {
-                    legend: { position: 'top', labels: { font: { size: 32 } } },
-                    title: { display: true, text: 'Live Sensor Readings (2-Hour Window)', font: { size: 40 } }
+                    legend: {
+                        position: 'top',
+                        labels: {
+                            font: { size: labelSize },
+                            boxWidth: isLargeScreen ? 15 : 10,
+                            padding: isLargeScreen ? 10 : 5
+                        }
+                    },
+                    title: {
+                        display: false
+                    }
                 }
             }
         });
@@ -160,7 +424,6 @@
         if (!sensorChart || !values || values.length !== 17) return;
 
         const newTime = new Date(timestamp).getTime();
-        console.log(`Adding data at ${newTime} with values:`, values);
         values.forEach((value, i) => {
             sensorChart.data.datasets[i].data.push({ x: newTime, y: value });
         });
@@ -170,7 +433,7 @@
                 dataset.data.shift();
             }
         });
-        sensorChart.update('none'); // Use 'none' for animation to improve performance
+        sensorChart.update('none');
     }
 
     function plotClassificationDot(x_pos, y_pos, classification) {
@@ -179,8 +442,10 @@
         if (!mapContainer || !mapImage || mapImage.clientWidth === 0) return;
 
         const dot = document.createElement('div');
-        dot.style.cssText = `position: absolute; width: 15px; height: 15px; border-radius: 50%; border: 2px solid white; transform: translate(-50%, -50%);`;
-        dot.style.backgroundColor = classification === 'ambient' ? 'darkgreen' : 'red';
+        const dotSize = window.innerWidth >= 1920 ? '15px' : '10px';
+        dot.style.cssText = `position: absolute; width: ${dotSize}; height: ${dotSize}; border-radius: 50%;
+                             border: 1px solid white; transform: translate(-50%, -50%);`;
+        dot.style.backgroundColor = classification === 'ambient' ? '#16a34a' : '#dc2626';
 
         const { scaleX, scaleY, top, left } = getMapScalingFactors(mapImage);
         dot.style.left = `${left(y_pos, scaleX)}px`;
@@ -193,6 +458,10 @@
         const robotDot = document.getElementById('robot-dot');
         const mapImage = document.getElementById('map-image');
         if (!robotDot || !mapImage || mapImage.clientWidth === 0) return;
+
+        const dotSize = window.innerWidth >= 1920 ? '30px' : '20px';
+        robotDot.style.width = dotSize;
+        robotDot.style.height = dotSize;
 
         const { scaleX, scaleY, top, left } = getMapScalingFactors(mapImage);
         robotDot.style.left = `${left(y_pos, scaleX)}px`;
@@ -225,9 +494,9 @@
         for (const [id, isActive] of Object.entries(states)) {
             const btn = document.getElementById(id);
             if (isActive) {
-                btn.classList.add("ring", "ring-offset-2", "ring-gray-400", "opacity-90");
+                btn.classList.add("ring-2", "ring-offset-1", "ring-gray-300", "opacity-90");
             } else {
-                btn.classList.remove("ring", "ring-offset-2", "ring-gray-400", "opacity-90");
+                btn.classList.remove("ring-2", "ring-offset-1", "ring-gray-300", "opacity-90");
             }
         }
     }
@@ -249,11 +518,19 @@
 
     // --- MAIN EXECUTION ---
     document.addEventListener('DOMContentLoaded', () => {
-        // 1. Initialize UI components
         createOrUpdateChart();
         updateButtonStates();
 
-        // 2. Add button event listeners
+        // Recreate chart on window resize for proper scaling
+        window.addEventListener('resize', () => {
+            if (sensorChart) {
+                sensorChart.destroy();
+                sensorChart = null;
+                createOrUpdateChart();
+            }
+        });
+
+        // Button event listeners
         document.getElementById('start-recording').onclick = () => {
             fetch('/start-recording', { method: 'POST' }).then(res => res.json()).then(data => {
                 recording = true;
@@ -302,13 +579,13 @@
             }
         };
 
-        // 3. Fetch initial data to populate the page
+        // Fetch initial metrics
         fetch('/metrics')
             .then(res => res.json())
             .then(updateMetrics)
             .catch(err => console.error("Failed to fetch initial metrics:", err));
 
-        // 4. Connect to SSE for real-time updates
+        // SSE connection
         let eventSource = new EventSource('/stream-updates');
         eventSource.onopen = () => console.log('SSE connection opened.');
 
@@ -336,10 +613,9 @@
             setTimeout(() => {
                 console.log("Attempting to reconnect...");
                 eventSource = new EventSource('/stream-updates');
-            }, 5000); // Reconnect after 5 seconds
+            }, 5000);
         };
     });
-
 </script>
 </body>
 </html>

@@ -35,7 +35,7 @@ import schedule
 sse_queue = Queue()
 
 # Set logging to INFO level
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("temi-stream")
 
 # WebRTC globals

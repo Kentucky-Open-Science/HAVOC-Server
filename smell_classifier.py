@@ -71,5 +71,6 @@ class SmellClassifier:
         new_data_df = new_data_df[self.feature_names]
 
         # Predict using the KNN model
-        prediction = self.knn.predict(new_data_df)[0]
+        # prediction = self.knn.predict(new_data_df)[0]
+        prediction = 'ambient'   # Hardcoded ambient smell for now (Demo)
         return prediction
